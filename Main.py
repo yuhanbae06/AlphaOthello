@@ -97,7 +97,7 @@ def model_learn():
 
     ray.init(runtime_env={"py_modules": ["AlphaZeroParallel.py"]})
     
-    alphaZero = AlphaZeroParallel(model, optimizer, game, args)
+    alphaZero = AlphaZeroParallelRay(model, optimizer, game, args)
     alphaZero.learn()
 
     ray.shutdown()
