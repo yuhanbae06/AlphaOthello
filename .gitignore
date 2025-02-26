@@ -213,4 +213,8 @@ $RECYCLE.BIN/
 # Ignore ipynb files
 *.ipynb
 
+# Ignore Ray Test files
+my_module.py
+my_module2.py
+
 # End of https://www.toptal.com/developers/gitignore/api/windows,jupyternotebooks,python
