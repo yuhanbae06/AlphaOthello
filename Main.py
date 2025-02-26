@@ -93,9 +93,13 @@ def model_learn():
         'dirichlet_epsilon': 0.25,
         'dirichlet_alpha': 0.3
     }
+
+    ray.init(runtime_env={"py_modules": ["AlphaZeroParallel.py"]})
     
     alphaZero = AlphaZeroParallel(model, optimizer, game, args)
     alphaZero.learn()
+
+    ray.shutdown()
 
 
 def model_play():
