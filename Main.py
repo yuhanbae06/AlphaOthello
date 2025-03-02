@@ -19,8 +19,8 @@ from Game import TicTacToe, ConnectFour
 from NeuralNet import ResNet
 from Node import Node
 from AlphaZero import MCTS, AlphaZero
-# from AlphaZeroParallel import MCTSParallel, AlphaZeroParallel, AlphaZeroParallelRay
-from AlphaZeroParallel import AlphaZeroParallel
+from AlphaZeroParallel import MCTSParallel, AlphaZeroParallel, AlphaZeroParallelRay
+# from AlphaZeroParallel import AlphaZeroParallel
 from Args import *
 
 import numpy as np
