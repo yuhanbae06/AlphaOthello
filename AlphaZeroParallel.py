@@ -283,8 +283,8 @@ class AlphaZeroParallelRay:
             
             policy_loss = F.cross_entropy(out_policy, policy_targets)
             value_loss = F.mse_loss(out_value, value_targets)
-            self.history['policy_losses'].append(policy_loss.detach().cpu())
-            self.history['value_losses'].append(value_loss.detach().cpu())
+            self.history['policy_losses'].append(policy_loss.detach().cpu().numpy())
+            self.history['value_losses'].append(value_loss.detach().cpu().numpy())
             loss = policy_loss + value_loss
             
             self.optimizer.zero_grad()
