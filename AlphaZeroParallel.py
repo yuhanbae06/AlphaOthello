@@ -277,7 +277,7 @@ class AlphaZeroParallelRay:
                 return_memory, return_history = memory_list[i]
                 memory += return_memory
                 self.add_history(return_history)
-                print(len(memory_list[i]))
+                print(len(return_memory))
                 
             self.model.train()
             for epoch in trange(self.args['num_epochs']):
