@@ -23,6 +23,7 @@ import torch.nn.functional as F
 
 from tqdm.notebook import trange
 import random
+import pickle
 import ray
 
 
@@ -284,7 +285,10 @@ class AlphaZeroParallelRay:
                 self.train(memory)
 
             if self.monitor:
-                print(self.history)
+                file = open(f"./saved_history/history_{iteration}_{self.game}.pickle", "wb")
+                pickle.dump(self.history, file)
+                file.close()
+                # print(self.history)
                 self.history = dict(win=0, draw=0, lose=0)
             
             torch.save(self.model.state_dict(), f"./saved_model/model_{iteration}_{self.game}.pt")
