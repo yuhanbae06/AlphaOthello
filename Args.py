@@ -18,7 +18,7 @@ from dataclasses import dataclass, asdict
 
 # +
 @dataclass
-class Arg:
+class Args:
     C: float = 2
     num_searches: int = 60
     num_iterations: int = 3
@@ -37,5 +37,5 @@ class Arg:
     def dict_(self):
         return asdict(self)
 
-def get_arg(exp_name="exp0"):
-    return getattr(Arg, exp_name)()
+def get_args(exp_name="exp0"):
+    return getattr(Args, exp_name)()

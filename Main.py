@@ -96,8 +96,8 @@ def model_learn():
     #     'dirichlet_alpha': 0.3
     # }
 
-    args = get_arg()
-    args.dict_()
+    args = get_args()
+    args_dict = args.dict_()
 
     ray.init(runtime_env={"py_modules": ["AlphaZeroParallel.py"]})
     
