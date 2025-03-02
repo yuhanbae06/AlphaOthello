@@ -280,8 +280,9 @@ class AlphaZeroParallelRay:
             for epoch in trange(self.args['num_epochs']):
                 self.train(memory)
 
-            print(self.history)
-            self.history = dict(win=0, draw=0, lose=0)
+            if self.monitor:
+                print(self.history)
+                self.history = dict(win=0, draw=0, lose=0)
             
             torch.save(self.model.state_dict(), f"./saved_model/model_{iteration}_{self.game}.pt")
             torch.save(self.optimizer.state_dict(), f"./saved_model/optimizer_{iteration}_{self.game}.pt")
