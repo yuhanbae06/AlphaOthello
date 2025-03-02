@@ -95,9 +95,6 @@ def model_learn():
     ray.shutdown()
 
 
-model_learn()
-
-
 def model_play():
     game = TicTacToe()
     player = 1
@@ -150,5 +147,3 @@ def model_play():
             break
             
         player = game.get_opponent(player)
-
-
