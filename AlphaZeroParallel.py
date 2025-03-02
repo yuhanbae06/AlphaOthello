@@ -189,7 +189,7 @@ class AlphaZeroParallelRay:
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
         self.monitor = monitor
-        self.history = dict('win': 0, 'draw': 0, 'lose': 0)
+        self.history = dict(win=0, draw=0, lose=0)
 
     @ray.remote(num_gpus=0.05)
     def selfPlay(self):
