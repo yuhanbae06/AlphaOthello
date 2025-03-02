@@ -213,7 +213,7 @@ class AlphaZeroParallelRay:
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
         self.monitor = monitor
-        self.history = dict(win=0, draw=0, lose=0)
+        self.history = dict(win=0, draw=0, lose=0, policy_losses=[], value_losses=[])
 
     @ray.remote(num_gpus=0.05)
     def selfPlay(self):
@@ -283,6 +283,8 @@ class AlphaZeroParallelRay:
             
             policy_loss = F.cross_entropy(out_policy, policy_targets)
             value_loss = F.mse_loss(out_value, value_targets)
+            self.history[policy_losses].append(policy_loss)
+            self.history[value_losses].append(value_loss)
             loss = policy_loss + value_loss
             
             self.optimizer.zero_grad()
@@ -312,7 +314,7 @@ class AlphaZeroParallelRay:
                 pickle.dump(self.history, file)
                 file.close()
                 # print(self.history)
-                self.history = dict(win=0, draw=0, lose=0)
+                self.history = dict(win=0, draw=0, lose=0, policy_losses=[], value_losses=[])
             
             torch.save(self.model.state_dict(), f"./saved_model/model_{iteration}_{self.game}.pt")
             torch.save(self.optimizer.state_dict(), f"./saved_model/optimizer_{iteration}_{self.game}.pt")
