@@ -20,6 +20,7 @@ from NeuralNet import ResNet
 from Node import Node
 from AlphaZero import MCTS, AlphaZero
 from AlphaZeroParallel import MCTSParallel, AlphaZeroParallel, AlphaZeroParallelRay
+from Arg import *
 
 import numpy as np
 print(np.__version__)
@@ -82,18 +83,21 @@ def model_learn():
     
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
     
-    args = {
-        'C': 2,
-        'num_searches': 60,
-        'num_iterations': 3,
-        'num_selfPlay_iterations': 500,
-        'num_parallel_games': 100,
-        'num_epochs': 4,
-        'batch_size': 64,
-        'temperature': 1.25,
-        'dirichlet_epsilon': 0.25,
-        'dirichlet_alpha': 0.3
-    }
+    # args = {
+    #     'C': 2,
+    #     'num_searches': 60,
+    #     'num_iterations': 3,
+    #     'num_selfPlay_iterations': 500,
+    #     'num_parallel_games': 100,
+    #     'num_epochs': 4,
+    #     'batch_size': 64,
+    #     'temperature': 1.25,
+    #     'dirichlet_epsilon': 0.25,
+    #     'dirichlet_alpha': 0.3
+    # }
+
+    args = get_arg()
+    args.dict_()
 
     ray.init(runtime_env={"py_modules": ["AlphaZeroParallel.py"]})
     
