@@ -194,6 +194,7 @@ class AlphaZeroParallelRay:
     @ray.remote(num_gpus=0.05)
     def selfPlay(self):
         return_memory = []
+        return_history = dict(win=0, draw=0, lose=0)
         player = 1
         spGames = [SPG(self.game) for spg in range(self.args['num_parallel_games'])]
         
@@ -224,11 +225,11 @@ class AlphaZeroParallelRay:
                 if is_terminal:
                     if self.monitor:
                         if value and player == 1:
-                            self.history['win'] += 1
+                            return_history['win'] += 1
                         elif value and player == -1:
-                            self.history['lose'] += 1
+                            return_history['lose'] += 1
                         else:
-                            self.history['draw'] += 1
+                            return_history['draw'] += 1
                     for hist_neutral_state, hist_action_probs, hist_player in spg.memory:
                         hist_outcome = value if hist_player == player else self.game.get_opponent_value(value)
                         return_memory.append((
@@ -240,7 +241,7 @@ class AlphaZeroParallelRay:
                     
             player = self.game.get_opponent(player)
             
-        return return_memory
+        return return_memory, return_history
                 
     def train(self, memory):
         random.shuffle(memory)
@@ -273,7 +274,9 @@ class AlphaZeroParallelRay:
             futures = [self.selfPlay.remote(self) for i in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games'])]
             memory_list = ray.get(futures)
             for i in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
-                memory += memory_list[i]
+                return_memory, return_history = memory_list[i]
+                memory += return_memory
+                self.add_history(return_history)
                 print(len(memory_list[i]))
                 
             self.model.train()
@@ -286,6 +289,10 @@ class AlphaZeroParallelRay:
             
             torch.save(self.model.state_dict(), f"./saved_model/model_{iteration}_{self.game}.pt")
             torch.save(self.optimizer.state_dict(), f"./saved_model/optimizer_{iteration}_{self.game}.pt")
+
+    def add_history(self, return_history):
+        for key, value in return_history.items():
+            self.history[key] += value
 
 
 class SPG:
