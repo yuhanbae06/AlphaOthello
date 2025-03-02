@@ -94,15 +94,18 @@ class MCTSParallel:
 
 
 class AlphaZeroParallel:
-    def __init__(self, model, optimizer, game, args):
+    def __init__(self, model, optimizer, game, args, monitor=False):
         self.model = model
         self.optimizer = optimizer
         self.game = game
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
+        self.monitor = monitor
+        self.history = dict(win=0, draw=0, lose=0)
         
     def selfPlay(self):
         return_memory = []
+        return_history = dict(win=0, draw=0, lose=0)
         player = 1
         spGames = [SPG(self.game) for spg in range(self.args['num_parallel_games'])]
         
@@ -131,6 +134,13 @@ class AlphaZeroParallel:
                 value, is_terminal = self.game.get_value_and_terminated(spg.state, action)
 
                 if is_terminal:
+                    if self.monitor:
+                        if value and player == 1:
+                            return_history['win'] += 1
+                        elif value and player == -1:
+                            return_history['lose'] += 1
+                        else:
+                            return_history['draw'] += 1
                     for hist_neutral_state, hist_action_probs, hist_player in spg.memory:
                         hist_outcome = value if hist_player == player else self.game.get_opponent_value(value)
                         return_memory.append((
@@ -142,7 +152,7 @@ class AlphaZeroParallel:
                     
             player = self.game.get_opponent(player)
             
-        return return_memory
+        return return_memory, return_history
                 
     def train(self, memory):
         random.shuffle(memory)
@@ -172,14 +182,27 @@ class AlphaZeroParallel:
             
             self.model.eval()
             for selfPlay_iteration in trange(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
-                memory += self.selfPlay()
+                return_memory, return_history = self.selfPlay()
+                memory += return_memory
+                self.add_history(return_history)
                 
             self.model.train()
             for epoch in trange(self.args['num_epochs']):
                 self.train(memory)
+
+            if self.monitor:
+                file = open(f"./saved_history/history_{iteration}_{self.game}.pickle", "wb")
+                pickle.dump(self.history, file)
+                file.close()
+                print(self.history)
+                self.history = dict(win=0, draw=0, lose=0)
             
             torch.save(self.model.state_dict(), f"./saved_model/model_{iteration}_{self.game}.pt")
             torch.save(self.optimizer.state_dict(), f"./saved_model/optimizer_{iteration}_{self.game}.pt")
+
+    def add_history(self, return_history):
+        for key, value in return_history.items():
+            self.history[key] += value
 
 
 class AlphaZeroParallelRay:

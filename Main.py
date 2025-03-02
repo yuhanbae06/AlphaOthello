@@ -19,7 +19,8 @@ from Game import TicTacToe, ConnectFour
 from NeuralNet import ResNet
 from Node import Node
 from AlphaZero import MCTS, AlphaZero
-from AlphaZeroParallel import MCTSParallel, AlphaZeroParallel, AlphaZeroParallelRay
+# from AlphaZeroParallel import MCTSParallel, AlphaZeroParallel, AlphaZeroParallelRay
+from AlphaZeroParallel import AlphaZeroParallel
 from Args import *
 
 import numpy as np
@@ -86,11 +87,15 @@ def model_learn():
     args = get_args().dict_()
 
     ray.init(runtime_env={"py_modules": ["AlphaZeroParallel.py"]})
-    
+
+    # alphaZero = AlphaZeroParallel(model, optimizer, game, args, True)
     alphaZero = AlphaZeroParallelRay(model, optimizer, game, args, True)
     alphaZero.learn()
 
     ray.shutdown()
+
+
+model_learn()
 
 
 def model_play():

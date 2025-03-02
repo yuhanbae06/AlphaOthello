@@ -217,7 +217,4 @@ $RECYCLE.BIN/
 my_module.py
 my_module2.py
 
-# saved_history folder
-!saved_history/*
-
 # End of https://www.toptal.com/developers/gitignore/api/windows,jupyternotebooks,python
