@@ -182,12 +182,14 @@ class AlphaZeroParallel:
 
 
 class AlphaZeroParallelRay:
-    def __init__(self, model, optimizer, game, args):
+    def __init__(self, model, optimizer, game, args, monitor=False):
         self.model = model
         self.optimizer = optimizer
         self.game = game
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
+        self.monitor = monitor
+        self.history = dict('win': 0, 'draw': 0, 'lose': 0)
 
     @ray.remote(num_gpus=0.05)
     def selfPlay(self):
@@ -220,6 +222,13 @@ class AlphaZeroParallelRay:
                 value, is_terminal = self.game.get_value_and_terminated(spg.state, action)
 
                 if is_terminal:
+                    if self.monitor:
+                        if value and player == 1:
+                            self.history['win'] += 1
+                        elif value and player == -1:
+                            self.history['lose'] += 1
+                        else:
+                            self.history['draw'] += 1
                     for hist_neutral_state, hist_action_probs, hist_player in spg.memory:
                         hist_outcome = value if hist_player == player else self.game.get_opponent_value(value)
                         return_memory.append((
@@ -270,6 +279,9 @@ class AlphaZeroParallelRay:
             self.model.train()
             for epoch in trange(self.args['num_epochs']):
                 self.train(memory)
+
+            print(self.history)
+            self.history = dict('win': 0, 'draw': 0, 'lose': 0)
             
             torch.save(self.model.state_dict(), f"./saved_model/model_{iteration}_{self.game}.pt")
             torch.save(self.optimizer.state_dict(), f"./saved_model/optimizer_{iteration}_{self.game}.pt")
