@@ -20,7 +20,7 @@ from NeuralNet import ResNet
 from Node import Node
 from AlphaZero import MCTS, AlphaZero
 from AlphaZeroParallel import MCTSParallel, AlphaZeroParallel, AlphaZeroParallelRay
-from Arg import *
+from Args import *
 
 import numpy as np
 print(np.__version__)
