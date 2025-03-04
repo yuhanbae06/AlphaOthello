@@ -13,6 +13,8 @@
 #     name: alphaothello
 # ---
 
+
+
 import numpy as np
 
 
@@ -154,3 +156,74 @@ class ConnectFour:
             encoded_state = np.swapaxes(encoded_state, 0, 1)
         
         return encoded_state
+
+'''
+변수 이름에 대한 약속
+
+state: 판의 상태이다. row*col의 2차원 np.array로 구현. 1,-1은 돌이며 0은 아무것도 없음음
+action: state를 변화 시키는 것(ex: 새로운 돌을 놓고 그 돌로 인해 뒤집어지는거 계산). np.array 1차원 행렬 [x,y]
+player: int로 표현; 1돌의 주인이 1이고 -1돌의 주인이 -1
+'''
+
+
+class Othello:
+    def __init__(self):
+        self.row_count=6 #should be even!
+        self.col_count=6
+
+
+    def __repr__(self):
+        return "Othello"
+    
+    def get_initial_state(self):
+        initialstate=np.zeros(shape=(self.row_count,self.col_count),dtype=int)
+        initialstate[self.row_count//2-1:self.row_count//2+1,self.col_count//2-1:self.col_count//2+1]=np.array([[1,-1],[-1,1]])
+        # print(initialstate)
+        return initialstate
+    
+    def restrict(self, row, col):
+        return row >= 0 and row < self.row_count and col >= 0 and col < self.col_count
+    
+    def get_next_state(self, state, action, player):
+        #둘다 -1 이면 돌 못 놓은거로 하죠?
+        row=action[0]
+        col=action[1]
+        if row==-1 and col==-1:
+            pass
+        else:
+            state[row,col]=player
+            for dx in [-1,0,1]:
+                for dy in [-1,0,1]:
+                    if dx==0 and dy==0: continue
+                    x=row
+                    y=col
+                    while True:
+                        x+=dx
+                        y+=dy
+                        # print(x,y,dx,dy)
+                        if (not self.restrict(x,y)) or state[x,y]==0:
+                            # print('fuck')
+                            break
+                        elif state[x,y]==player:
+                            x-=dx
+                            y-=dy
+                            while x!=row or y!=col:
+                                state[x,y]=player
+                                x-=dx
+                                y-=dy
+                            break
+
+        return self.change_perspective(state,player)
+
+    def get_valid_moves(self, state):
+        return 
+
+    def change_perspective(self, state, player:int):
+        return state*player
+
+    def get_opponent(self, player):
+        return -player
+    
+    def get_opponent_value(self, value):
+        return -value
+    
