@@ -78,8 +78,8 @@ class MCTSParallel:
                 policy, value = self.model(
                     torch.tensor(self.game.get_encoded_state(states), device=self.model.device)
                 )
-                policy = torch.softmax(policy, axis=1).cpu().numpy()
-                value = value.cpu().numpy()
+                policy = torch.softmax(policy, axis=1).detach().cpu().numpy()
+                value = value.detach().cpu().numpy()
                 
             for i, mappingIdx in enumerate(expandable_spGames):
                 node = spGames[mappingIdx].node
