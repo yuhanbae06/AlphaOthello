@@ -20,6 +20,7 @@ from Node import Node
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 
 from tqdm.notebook import trange
 import random
@@ -209,7 +210,7 @@ class AlphaZeroParallel:
 
 
 class AlphaZeroParallelRay:
-    def __init__(self, model, optimizer, game, args, monitor=False):
+    def __init__(self, model, optimizer, game, args, monitor=False, log_dir="logs"):
         self.model = model
         self.optimizer = optimizer
         self.game = game
@@ -217,7 +218,17 @@ class AlphaZeroParallelRay:
         self.mcts = MCTSParallel(game, args, model)
         self.monitor = monitor
         self.history = dict(win=0, draw=0, lose=0, policy_losses=[], value_losses=[])
+        self.log_dir = log_dir
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['writer'] = None  # Remove writer before pickling
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.writer = SummaryWriter(log_dir=self.log_dir)  # Recreate writer after unpickling
+    
     @ray.remote(num_gpus=0.05)
     def selfPlay(self):
         return_memory = []
@@ -290,6 +301,7 @@ class AlphaZeroParallelRay:
             if self.monitor:
                 self.history['policy_losses'].append(policy_loss.detach().cpu().item())
                 self.history['value_losses'].append(value_loss.detach().cpu().item())
+                self.log_scalar("loss", loss, batchIdx)
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -326,6 +338,12 @@ class AlphaZeroParallelRay:
     def add_history(self, return_history):
         for key, value in return_history.items():
             self.history[key] += value
+
+    def log_scalar(self, tag, value, step):
+        self.writer.add_scalar(tag, value, step)
+
+    def close_writer(self):
+        self.writer.close()
 
 
 class SPG:
