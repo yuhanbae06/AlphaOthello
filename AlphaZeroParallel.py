@@ -282,7 +282,7 @@ class AlphaZeroParallelRay:
             
         return return_memory, return_history
                 
-    def train(self, memory):
+    def train(self, memory, num_iteration, num_epoch):
         random.shuffle(memory)
         for batchIdx in range(0, len(memory), self.args['batch_size']):
             sample = memory[batchIdx:min(len(memory) - 1, batchIdx + self.args['batch_size'])] # Change to memory[batchIdx:batchIdx+self.args['batch_size']] in case of an error
@@ -302,7 +302,7 @@ class AlphaZeroParallelRay:
             if self.monitor:
                 self.history['policy_losses'].append(policy_loss.detach().cpu().item())
                 self.history['value_losses'].append(value_loss.detach().cpu().item())
-                self.log_scalar("loss", loss, batchIdx/self.args['batch_size'])
+                self.log_scalar("loss_"+str(num_iteration), loss, num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -324,7 +324,7 @@ class AlphaZeroParallelRay:
                 
             self.model.train()
             for epoch in trange(self.args['num_epochs']):
-                self.train(memory)
+                self.train(memory, iteration, epoch)
 
             if self.monitor:
                 file = open(f"./saved_history/history_{iteration}_{self.game}.pickle", "wb")
