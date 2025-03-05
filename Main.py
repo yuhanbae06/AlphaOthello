@@ -32,6 +32,7 @@ print(torch.__version__)
 
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 
 torch.manual_seed(0)
 
@@ -75,7 +76,7 @@ def model_test():
     plt.show()
 
 
-def model_learn():
+def model_learn(writer):
     game = TicTacToe()
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -89,7 +90,7 @@ def model_learn():
     ray.init(runtime_env={"py_modules": ["AlphaZeroParallel.py"]})
 
     # alphaZero = AlphaZeroParallel(model, optimizer, game, args, True)
-    alphaZero = AlphaZeroParallelRay(model, optimizer, game, args, True)
+    alphaZero = AlphaZeroParallelRay(model, optimizer, game, args, writer, True)
     alphaZero.learn()
 
     ray.shutdown()
