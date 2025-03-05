@@ -219,6 +219,7 @@ class AlphaZeroParallelRay:
         self.monitor = monitor
         self.history = dict(win=0, draw=0, lose=0, policy_losses=[], value_losses=[])
         self.log_dir = log_dir
+        self.writer = SummaryWriter(log_dir=log_dir)
 
     def __getstate__(self):
         state = self.__dict__.copy()
