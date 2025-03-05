@@ -216,7 +216,7 @@ class AlphaZeroParallelRay:
         self.game = game
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
-        # self.writer = writer
+        self.writer = writer
         self.monitor = monitor
         self.history = dict(win=0, draw=0, lose=0, policy_losses=[], value_losses=[])
 

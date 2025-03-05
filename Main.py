@@ -76,7 +76,7 @@ def model_test():
     plt.show()
 
 
-def model_learn(writer):
+def model_learn():
     game = TicTacToe()
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -90,6 +90,7 @@ def model_learn(writer):
     ray.init(runtime_env={"py_modules": ["AlphaZeroParallel.py"]})
 
     # alphaZero = AlphaZeroParallel(model, optimizer, game, args, True)
+    writer = SummaryWriter()
     alphaZero = AlphaZeroParallelRay(model, optimizer, game, args, writer, True)
     alphaZero.learn()
 
