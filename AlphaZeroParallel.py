@@ -20,7 +20,6 @@ from Node import Node
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.utils.tensorboard import SummaryWriter
 
 from tqdm.notebook import trange
 import random
@@ -210,13 +209,12 @@ class AlphaZeroParallel:
 
 
 class AlphaZeroParallelRay:
-    def __init__(self, model, optimizer, game, args, writer, monitor=False):
+    def __init__(self, model, optimizer, game, args, monitor=False):
         self.model = model
         self.optimizer = optimizer
         self.game = game
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
-        self.writer = writer
         self.monitor = monitor
         self.history = dict(win=0, draw=0, lose=0, policy_losses=[], value_losses=[])
 
@@ -292,7 +290,6 @@ class AlphaZeroParallelRay:
             if self.monitor:
                 self.history['policy_losses'].append(policy_loss.detach().cpu().item())
                 self.history['value_losses'].append(value_loss.detach().cpu().item())
-                # self.writer.add_scalar("Loss/train", loss.detach().cpu().item(), batchIdx)
             
             self.optimizer.zero_grad()
             loss.backward()

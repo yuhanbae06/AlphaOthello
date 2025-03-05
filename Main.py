@@ -32,7 +32,6 @@ print(torch.__version__)
 
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.tensorboard import SummaryWriter
 
 torch.manual_seed(0)
 
@@ -90,8 +89,7 @@ def model_learn():
     ray.init(runtime_env={"py_modules": ["AlphaZeroParallel.py"]})
 
     # alphaZero = AlphaZeroParallel(model, optimizer, game, args, True)
-    writer = SummaryWriter()
-    alphaZero = AlphaZeroParallelRay(model, optimizer, game, args, writer, True)
+    alphaZero = AlphaZeroParallelRay(model, optimizer, game, args, True)
     alphaZero.learn()
 
     ray.shutdown()
