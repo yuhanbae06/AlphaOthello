@@ -185,7 +185,7 @@ class Othello:
         return row >= 0 and row < self.row_count and col >= 0 and col < self.col_count
     
     def get_next_state(self, state, action, player):
-        #둘다 -1 이면 돌 못 놓은거로 하죠?
+        #둘다 -1 이면 돌 못 놓은거
         row=action[0]
         col=action[1]
         if row==-1 and col==-1:
@@ -216,7 +216,39 @@ class Othello:
         return self.change_perspective(state,player)
 
     def get_valid_moves(self, state):
-        return 
+        ans=np.zeros(shape=self.row_count*self.col_count,dtype=np.uint8)
+        for ij in range(self.row_count*self.col_count):
+            i=ij%self.row_count
+            j=ij//self.row_count
+
+            if(state[i,j]): continue
+
+            for dx in [-1,0,1]:
+                if(ans[ij]): break
+                for dy in [-1,0,1]:
+                    if(ans[ij]): break
+                    if dx==0 and dy==0: continue
+                    x=i
+                    y=j
+                    while True:
+                        x+=dx
+                        y+=dy
+                        if (not self.restrict(x,y)) or state[x,y]==0:
+                            break
+                        elif state[x,y]==1:
+                            ans[ij]=1
+                            break
+        return ans
+
+    def check_finish(self, state):
+        return np.sum(self.get_valid_moves(state))==0 and np.sum(self.get_valid_moves(state*-1))    
+    
+    def check_winner(self, state):
+        return 1 if np.sum(state)>0 else -1    
+
+    def get_value_and_terminated(self, state, action):
+        pass
+        #???? 이거 뭐하는거임
 
     def change_perspective(self, state, player:int):
         return state*player
@@ -226,4 +258,14 @@ class Othello:
     
     def get_opponent_value(self, value):
         return -value
+
+    def get_encoded_state(self, state):
+        encoded_state = np.stack(
+            (state == -1, state == 0, state == 1)
+        ).astype(np.float32)
+        
+        if len(state.shape) == 3:
+            encoded_state = np.swapaxes(encoded_state, 0, 1)
+        
+        return encoded_state
     
