@@ -20,6 +20,7 @@ from Node import Node
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 
 from tqdm.notebook import trange
 import random
@@ -78,8 +79,8 @@ class MCTSParallel:
                 policy, value = self.model(
                     torch.tensor(self.game.get_encoded_state(states), device=self.model.device)
                 )
-                policy = torch.softmax(policy, axis=1).cpu().numpy()
-                value = value.cpu().numpy()
+                policy = torch.softmax(policy, axis=1).detach().cpu().numpy()
+                value = value.detach().cpu().numpy()
                 
             for i, mappingIdx in enumerate(expandable_spGames):
                 node = spGames[mappingIdx].node
@@ -209,7 +210,7 @@ class AlphaZeroParallel:
 
 
 class AlphaZeroParallelRay:
-    def __init__(self, model, optimizer, game, args, monitor=False):
+    def __init__(self, model, optimizer, game, args, monitor=False, log_dir="logs"):
         self.model = model
         self.optimizer = optimizer
         self.game = game
@@ -217,7 +218,18 @@ class AlphaZeroParallelRay:
         self.mcts = MCTSParallel(game, args, model)
         self.monitor = monitor
         self.history = dict(win=0, draw=0, lose=0, policy_losses=[], value_losses=[])
+        self.log_dir = log_dir
+        self.writer = SummaryWriter(log_dir=log_dir)
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['writer'] = None  # Remove writer before pickling
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.writer = SummaryWriter(log_dir=self.log_dir)  # Recreate writer after unpickling
+    
     @ray.remote(num_gpus=0.05)
     def selfPlay(self):
         return_memory = []
@@ -270,7 +282,7 @@ class AlphaZeroParallelRay:
             
         return return_memory, return_history
                 
-    def train(self, memory):
+    def train(self, memory, num_iteration, num_epoch):
         random.shuffle(memory)
         for batchIdx in range(0, len(memory), self.args['batch_size']):
             sample = memory[batchIdx:min(len(memory) - 1, batchIdx + self.args['batch_size'])] # Change to memory[batchIdx:batchIdx+self.args['batch_size']] in case of an error
@@ -286,10 +298,11 @@ class AlphaZeroParallelRay:
             
             policy_loss = F.cross_entropy(out_policy, policy_targets)
             value_loss = F.mse_loss(out_value, value_targets)
+            loss = policy_loss + value_loss
             if self.monitor:
                 self.history['policy_losses'].append(policy_loss.detach().cpu().item())
                 self.history['value_losses'].append(value_loss.detach().cpu().item())
-            loss = policy_loss + value_loss
+                self.log_scalar("loss_"+str(num_iteration), loss, num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -311,7 +324,7 @@ class AlphaZeroParallelRay:
                 
             self.model.train()
             for epoch in trange(self.args['num_epochs']):
-                self.train(memory)
+                self.train(memory, iteration, epoch)
 
             if self.monitor:
                 file = open(f"./saved_history/history_{iteration}_{self.game}.pickle", "wb")
@@ -326,6 +339,12 @@ class AlphaZeroParallelRay:
     def add_history(self, return_history):
         for key, value in return_history.items():
             self.history[key] += value
+
+    def log_scalar(self, tag, value, step):
+        self.writer.add_scalar(tag, value, step)
+
+    def close_writer(self):
+        self.writer.close()
 
 
 class SPG:
