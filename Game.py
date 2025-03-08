@@ -165,28 +165,28 @@ player: int로 표현; 1돌의 주인이 1이고 -1돌의 주인이 -1
 class Othello:
     def __init__(self):
         self.row_count = 6 #should be even!
-        self.col_count = 6
-        self.action_size = self.row_count * self.col_count + 1
+        self.column_count = 6
+        self.action_size = self.row_count * self.column_count + 1
 
     def __repr__(self):
         return "Othello"
     
     def get_initial_state(self):
-        initialstate=np.zeros(shape=(self.row_count,self.col_count),dtype=int)
-        initialstate[self.row_count//2-1:self.row_count//2+1,self.col_count//2-1:self.col_count//2+1]=np.array([[-1,1],[1,-1]])
+        initialstate=np.zeros(shape=(self.row_count,self.column_count),dtype=int)
+        initialstate[self.row_count//2-1:self.row_count//2+1,self.column_count//2-1:self.column_count//2+1]=np.array([[-1,1],[1,-1]])
         # print(initialstate)
         return initialstate
     
     def restrict(self, row, col):
-        return row >= 0 and row < self.row_count and col >= 0 and col < self.col_count
+        return row >= 0 and row < self.row_count and col >= 0 and col < self.column_count
     
     def get_next_state(self, state, action, player):
         #둘다 -1 이면 돌 못 놓은거
         if action == self.action_size - 1:
             pass
         else:
-            row = action // self.col_count
-            col = action % self.col_count
+            row = action // self.column_count
+            col = action % self.column_count
             state[row,col]=player
             for dx in [-1,0,1]:
                 for dy in [-1,0,1]:
@@ -213,9 +213,9 @@ class Othello:
 
     def get_valid_moves(self, state):
         ans=np.zeros(shape=self.action_size,dtype=np.uint8)
-        for ij in range(self.row_count*self.col_count):
-            i=ij//self.col_count
-            j=ij%self.col_count
+        for ij in range(self.row_count*self.column_count):
+            i=ij//self.column_count
+            j=ij%self.column_count
             flip = False
 
             if(state[i,j]): continue
