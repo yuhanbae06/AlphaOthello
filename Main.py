@@ -76,7 +76,7 @@ def model_test(game_name):
     print(state)
     print(tensor_state)
     
-    plt.bar(range(tictactoe.action_size), policy)
+    plt.bar(range(game.action_size), policy)
     plt.show()
 
 
