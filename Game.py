@@ -13,8 +13,6 @@
 #     name: alphaothello
 # ---
 
-
-
 import numpy as np
 
 
@@ -164,20 +162,18 @@ state: 판의 상태이다. row*col의 2차원 np.array로 구현. 1,-1은 돌�
 action: state를 변화 시키는 것(ex: 새로운 돌을 놓고 그 돌로 인해 뒤집어지는거 계산). np.array 1차원 행렬 [x,y]
 player: int로 표현; 1돌의 주인이 1이고 -1돌의 주인이 -1
 '''
-
-
 class Othello:
     def __init__(self):
-        self.row_count=6 #should be even!
-        self.col_count=6
-
+        self.row_count = 6 #should be even!
+        self.col_count = 6
+        self.action_size = self.row_count * self.col_count + 1
 
     def __repr__(self):
         return "Othello"
     
     def get_initial_state(self):
         initialstate=np.zeros(shape=(self.row_count,self.col_count),dtype=int)
-        initialstate[self.row_count//2-1:self.row_count//2+1,self.col_count//2-1:self.col_count//2+1]=np.array([[1,-1],[-1,1]])
+        initialstate[self.row_count//2-1:self.row_count//2+1,self.col_count//2-1:self.col_count//2+1]=np.array([[-1,1],[1,-1]])
         # print(initialstate)
         return initialstate
     
@@ -186,11 +182,11 @@ class Othello:
     
     def get_next_state(self, state, action, player):
         #둘다 -1 이면 돌 못 놓은거
-        row=action[0]
-        col=action[1]
-        if row==-1 and col==-1:
+        if action == self.action_size - 1:
             pass
         else:
+            row = action // self.col_count
+            col = action % self.col_count
             state[row,col]=player
             for dx in [-1,0,1]:
                 for dy in [-1,0,1]:
@@ -213,13 +209,14 @@ class Othello:
                                 y-=dy
                             break
 
-        return self.change_perspective(state,player)
+        return state
 
     def get_valid_moves(self, state):
-        ans=np.zeros(shape=self.row_count*self.col_count,dtype=np.uint8)
+        ans=np.zeros(shape=self.action_size,dtype=np.uint8)
         for ij in range(self.row_count*self.col_count):
-            i=ij%self.row_count
-            j=ij//self.row_count
+            i=ij//self.col_count
+            j=ij%self.col_count
+            flip = False
 
             if(state[i,j]): continue
 
@@ -235,20 +232,31 @@ class Othello:
                         y+=dy
                         if (not self.restrict(x,y)) or state[x,y]==0:
                             break
-                        elif state[x,y]==1:
+                        elif flip and state[x,y]==1:
                             ans[ij]=1
                             break
+                        elif state[x,y]==-1:
+                            flip=True
+        if np.sum(ans) == 0:
+            ans[-1] = 1
         return ans
 
     def check_finish(self, state):
-        return np.sum(self.get_valid_moves(state))==0 and np.sum(self.get_valid_moves(state*-1))    
+        return self.get_valid_moves(state)[-1] == 1 and self.get_valid_moves(self.change_perspective(state, -1))[-1] == 1
     
     def check_winner(self, state):
-        return 1 if np.sum(state)>0 else -1    
+        res = np.sum(state)
+        if res > 0:
+            return 1
+        elif res < 0:
+            return -1
+        else:
+            return 0
 
     def get_value_and_terminated(self, state, action):
-        pass
-        #???? 이거 뭐하는거임
+        if self.check_finish(state):
+            return self.check_winner(state), True
+        return 0, False
 
     def change_perspective(self, state, player:int):
         return state*player
@@ -268,4 +276,29 @@ class Othello:
             encoded_state = np.swapaxes(encoded_state, 0, 1)
         
         return encoded_state
+
+
+class Play:
+    def __init__(self):
+        self.game = Othello()
+        self.state = self.game.get_initial_state()
+        self.player = 1
+
+    def play(self):
+        while not self.game.check_finish(self.game.change_perspective(self.state, self.player)):
+            print(self.game.get_valid_moves(self.game.change_perspective(self.state, self.player)))
+            print("{0}의 차례".format(self.player))
+            self.print_state()
+            row = int(input("행: ")) - 1
+            col = int(input("열: ")) - 1
+            if row == -1 and col == -1:
+                action = self.game.action_size - 1
+            else:
+                action = row * self.game.row_count + col
+            self.state = self.game.get_next_state(self.state, action, self.player)
+            self.player = self.game.get_opponent(self.player)
+        self.print_state()
+        print("{0}의 승리!".format(self.game.check_winner(self.state)))
     
+    def print_state(self):
+        print(self.state)

@@ -15,11 +15,11 @@
 
 # +
 import import_ipynb
-from Game import TicTacToe, ConnectFour
-from NeuralNet import ResNet
-from Node import Node
-from AlphaZero import MCTS, AlphaZero
-from AlphaZeroParallel import MCTSParallel, AlphaZeroParallel, AlphaZeroParallelRay
+from Game import *
+from NeuralNet import *
+from Node import *
+from AlphaZero import *
+from AlphaZeroParallel import *
 # from AlphaZeroParallel import AlphaZeroParallel
 from Args import *
 
@@ -41,24 +41,29 @@ import matplotlib.pyplot as plt
 import random
 import math
 import ray
-
-
 # -
 
-def model_test():
-    tictactoe = TicTacToe()
+game_dict = {
+    "tictactoe": TicTacToe(),
+    "connectfour": ConnectFour(),
+    "othello": Othello()
+}
+
+
+def model_test(game_name):
+    game = game_dict[game_name]
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    state = tictactoe.get_initial_state()
-    state = tictactoe.get_next_state(state, 4, -1)
+    state = game.get_initial_state()
+    state = game.get_next_state(state, 13, 1)
     
     
-    encoded_state = tictactoe.get_encoded_state(state)
+    encoded_state = game.get_encoded_state(state)
     
     tensor_state = torch.tensor(encoded_state, device=device).unsqueeze(0)
     
-    model = ResNet(tictactoe, 4, 64, device=device)
+    model = ResNet(game, 4, 64, device=device)
     # model.load_state_dict(torch.load('model_2_TicTacToe.pt', map_location=device))
     model.eval()
     
@@ -75,8 +80,8 @@ def model_test():
     plt.show()
 
 
-def model_learn():
-    game = TicTacToe()
+def model_learn(game_name):
+    game = game_dict[game_name]
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -96,7 +101,7 @@ def model_learn():
 
 
 def model_play():
-    game = TicTacToe()
+    game = game_dict[game_name]
     player = 1
     
     args = {
@@ -109,7 +114,7 @@ def model_play():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     model = ResNet(game, 4, 64, device)
-    model.load_state_dict(torch.load("./saved_model/model_2_TicTacToe.pt", map_location=device))
+    model.load_state_dict(torch.load("./saved_model/model_2_{0}.pt".format(game.__repr__()), map_location=device))
     model.eval()
     
     mcts = MCTS(game, args, model)
@@ -136,12 +141,14 @@ def model_play():
             
         state = game.get_next_state(state, action, player)
         
-        value, is_terminal = game.get_value_and_terminated(state, action)
+        value, is_terminal = game.get_value_and_terminated(game.change_perspective(state, player), action)
         
         if is_terminal:
             print(state)
             if value == 1:
                 print(player, "won")
+            elif value == -1:
+                print(game.get_opponent(player), "won")
             else:
                 print("draw")
             break

@@ -63,7 +63,8 @@ class MCTSParallel:
                     node = node.select()
 
                 value, is_terminal = self.game.get_value_and_terminated(node.state, node.action_taken)
-                value = self.game.get_opponent_value(value)
+                if self.game.__repr__() != "Othello":
+                    value = self.game.get_opponent_value(value)
                 
                 if is_terminal:
                     node.backpropagate(value)
@@ -132,7 +133,7 @@ class AlphaZeroParallel:
 
                 spg.state = self.game.get_next_state(spg.state, action, player)
 
-                value, is_terminal = self.game.get_value_and_terminated(spg.state, action)
+                value, is_terminal = self.game.get_value_and_terminated(self.game.change_perspective(spg.state, player), action)
 
                 if is_terminal:
                     if self.monitor:
@@ -259,7 +260,7 @@ class AlphaZeroParallelRay:
 
                 spg.state = self.game.get_next_state(spg.state, action, player)
 
-                value, is_terminal = self.game.get_value_and_terminated(spg.state, action)
+                value, is_terminal = self.game.get_value_and_terminated(self.game.change_perspective(spg.state, player), action)
 
                 if is_terminal:
                     if self.monitor:
