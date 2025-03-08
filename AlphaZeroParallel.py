@@ -231,7 +231,7 @@ class AlphaZeroParallelRay:
         self.__dict__.update(state)
         self.writer = SummaryWriter(log_dir=self.log_dir)  # Recreate writer after unpickling
     
-    @ray.remote(num_gpus=1/(args['num_selfPlay_iterations'] // args['num_parallel_games']))
+    @ray.remote(num_gpus=0.2)
     def selfPlay(self):
         return_memory = []
         return_history = dict(win=0, draw=0, lose=0)
