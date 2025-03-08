@@ -100,7 +100,7 @@ def model_learn(game_name):
     ray.shutdown()
 
 
-def model_play():
+def model_play(game_name):
     game = game_dict[game_name]
     player = 1
     
