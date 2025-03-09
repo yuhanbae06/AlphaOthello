@@ -136,6 +136,7 @@ def model_play(game_name):
                 
         else:
             neutral_state = game.change_perspective(state, player)
+            print(game.get_valid_moves(neutral_state))
             mcts_probs = mcts.search(neutral_state)
             action = np.argmax(mcts_probs)
             
@@ -154,3 +155,11 @@ def model_play(game_name):
             break
             
         player = game.get_opponent(player)
+
+model_test("othello")
+
+model_learn("othello")
+
+model_play("othello")
+
+

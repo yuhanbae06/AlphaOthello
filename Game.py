@@ -216,7 +216,6 @@ class Othello:
         for ij in range(self.row_count*self.column_count):
             i=ij//self.column_count
             j=ij%self.column_count
-            flip = False
 
             if(state[i,j]): continue
 
@@ -227,14 +226,18 @@ class Othello:
                     if dx==0 and dy==0: continue
                     x=i
                     y=j
+                    flip = False
                     while True:
                         x+=dx
                         y+=dy
                         if (not self.restrict(x,y)) or state[x,y]==0:
                             break
-                        elif flip and state[x,y]==1:
-                            ans[ij]=1
-                            break
+                        if state[x,y]==1:
+                            if flip:
+                                ans[ij]=1
+                                break
+                            else:
+                                break
                         elif state[x,y]==-1:
                             flip=True
         if np.sum(ans) == 0:
