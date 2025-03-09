@@ -156,10 +156,4 @@ def model_play(game_name):
             
         player = game.get_opponent(player)
 
-model_test("othello")
-
-model_learn("othello")
-
-model_play("othello")
-
 
