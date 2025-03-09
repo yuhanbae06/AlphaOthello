@@ -156,7 +156,7 @@ class ConnectFour:
         return encoded_state
 
 '''
-변수 이름에 대한 약속
+변수 이름
 
 state: 판의 상태이다. row*col의 2차원 np.array로 구현. 1,-1은 돌이며 0은 아무것도 없음음
 action: state를 변화 시키는 것(ex: 새로운 돌을 놓고 그 돌로 인해 뒤집어지는거 계산). np.array 1차원 행렬 [x,y]
