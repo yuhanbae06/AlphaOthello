@@ -137,9 +137,9 @@ class AlphaZeroParallel:
 
                 if is_terminal:
                     if self.monitor:
-                        if value and player == 1:
+                        if value * player == 1:
                             return_history['win'] += 1
-                        elif value and player == -1:
+                        elif value * player == -1:
                             return_history['lose'] += 1
                         else:
                             return_history['draw'] += 1
@@ -264,9 +264,9 @@ class AlphaZeroParallelRay:
 
                 if is_terminal:
                     if self.monitor:
-                        if value and player == 1:
+                        if value * player == 1:
                             return_history['win'] += 1
-                        elif value and player == -1:
+                        elif value * player == -1:
                             return_history['lose'] += 1
                         else:
                             return_history['draw'] += 1
