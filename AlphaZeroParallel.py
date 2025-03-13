@@ -315,8 +315,10 @@ class SelfPlayRay:
 
                 if is_terminal:
                     if self.monitor:
+                        print(finish_games, random_number)
                         if finish_games == random_number:
-                            return_history['final_state']=spg.state
+                            print("FUck!")
+                            return_history['final_state'] = spg.state
                         finish_games += 1
                         if value * player == 1:
                             return_history['win'] += 1
