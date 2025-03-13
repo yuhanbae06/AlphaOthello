@@ -424,6 +424,12 @@ class AlphaZeroParallelRay:
     
     def learn(self):
         for iteration in range(self.args['num_iterations']):
+            img = np.zeros((3, 100, 100))
+            img[0] = np.arange(0, 10000).reshape(100, 100) / 10000
+            img[1] = 1 - np.arange(0, 10000).reshape(100, 100) / 10000
+
+            self.log_image('my_image', img, 0)
+            
             memory = []
             
             self.model.eval()
@@ -459,6 +465,9 @@ class AlphaZeroParallelRay:
 
     def log_scalar(self, tag, value, step):
         self.writer.add_scalar(tag, value, step)
+
+    def log_image(self, tag, value, step):
+        self.writer.add_image(tag, value, step)
 
     def close_writer(self):
         self.writer.close()

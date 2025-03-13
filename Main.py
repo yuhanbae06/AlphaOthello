@@ -155,5 +155,3 @@ def model_play(game_name):
             break
             
         player = game.get_opponent(player)
-
-
