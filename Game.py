@@ -170,6 +170,7 @@ class Othello:
         self.row_count = 6 #should be even!
         self.column_count = 6
         self.action_size = self.row_count * self.column_count + 1
+        self.interval = 16
 
     def __repr__(self):
         return "Othello"
@@ -282,6 +283,26 @@ class Othello:
             encoded_state = np.swapaxes(encoded_state, 0, 1)
         
         return encoded_state
+
+    def get_visualized_state(self, state):
+        size = 16
+        visualized_state = np.zeros((3, self.row_count*size, self.row_count*size))
+        for i in range(self.row_count):
+            for j in range(self.column_count):
+                if state[i, j] == 1:
+                    visualized_state[0, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 0
+                    visualized_state[1, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 0
+                    visualized_state[2, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 0
+                elif state[i, j] == 0:
+                    visualized_state[0, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 0
+                    visualized_state[1, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 1
+                    visualized_state[2, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 0
+                elif state[i, j] == -1:
+                    visualized_state[0, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 1
+                    visualized_state[1, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 1
+                    visualized_state[2, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 1
+
+        return visualized_state
 
 
 class Play:

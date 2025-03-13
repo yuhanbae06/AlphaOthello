@@ -285,6 +285,8 @@ class SelfPlayRay:
         return_memory = []
         return_history = dict(win=0, draw=0, lose=0)
         player = 1
+        random_number = np.random.randint(self.args['num_parallel_games'])
+        finish_games = 0
         spGames = [SPG(self.game) for spg in range(self.args['num_parallel_games'])]
         
         while len(spGames) > 0:
@@ -313,6 +315,9 @@ class SelfPlayRay:
 
                 if is_terminal:
                     if self.monitor:
+                        if finish_games == random_number:
+                            return_history['final_state']=spg.state
+                        finish_games += 1
                         if value * player == 1:
                             return_history['win'] += 1
                         elif value * player == -1:
@@ -424,11 +429,6 @@ class AlphaZeroParallelRay:
     
     def learn(self):
         for iteration in range(self.args['num_iterations']):
-            img = np.zeros((3, 100, 100))
-            img[0] = np.arange(0, 10000).reshape(100, 100) / 10000
-            img[1] = 1 - np.arange(0, 10000).reshape(100, 100) / 10000
-
-            self.log_image('my_image', img, 0)
             
             memory = []
             
@@ -443,6 +443,7 @@ class AlphaZeroParallelRay:
                 return_memory, return_history = memory_list[i]
                 memory += return_memory
                 self.add_history(return_history)
+                self.log_image('final_state', self.game.get_visualized_state(return_history['final_state']), i)
                 print(len(return_memory))
                 
             self.model.train()
