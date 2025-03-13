@@ -280,13 +280,13 @@ class SelfPlayRay:
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
         self.monitor = monitor
+        self.finish_games = 0
+        self.random_number = np.random.randint(self.args['num_parallel_games'])
 
     def play(self):
         return_memory = []
-        return_history = dict(win=0, draw=0, lose=0)
+        return_history = dict(win=0, draw=0, lose=0, final_state=None)
         player = 1
-        random_number = np.random.randint(self.args['num_parallel_games'])
-        finish_games = 0
         spGames = [SPG(self.game) for spg in range(self.args['num_parallel_games'])]
         
         while len(spGames) > 0:
@@ -315,12 +315,9 @@ class SelfPlayRay:
 
                 if is_terminal:
                     if self.monitor:
-                        print(finish_games, random_number)
-                        print("FUck!")
-                        if True:
-                            print("FUck!")
+                        if self.finish_games == self.random_number:
                             return_history['final_state'] = spg.state
-                        finish_games += 1
+                        self.finish_games += 1
                         if value * player == 1:
                             return_history['win'] += 1
                         elif value * player == -1:
