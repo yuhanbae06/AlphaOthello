@@ -442,7 +442,7 @@ class AlphaZeroParallelRay:
             for i in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
                 return_memory, return_history = memory_list[i]
                 memory += return_memory
-                self.add_history(return_history)
+                # self.add_history(return_history)
                 self.log_image('final_state', self.game.get_visualized_state(return_history['final_state']), i)
                 print(len(return_memory))
                 
