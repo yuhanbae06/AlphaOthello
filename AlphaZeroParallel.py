@@ -272,7 +272,7 @@ class AlphaZeroParallel:
 
 
 # +
-@ray.remote(gpus=0.2)
+@ray.remote(num_gpus=0.2)
 class SelfPlayRay:
     def __init___(self, model, game, args, monitor):
         self.model = model
