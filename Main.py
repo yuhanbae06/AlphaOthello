@@ -80,7 +80,7 @@ def model_test(game_name):
     plt.show()
 
 
-def model_learn(game_name):
+def model_learn(game_name, exp_name):
     game = game_dict[game_name]
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -89,7 +89,7 @@ def model_learn(game_name):
     
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
 
-    args = get_args(exp_name="exp1").dict_()
+    args = get_args(exp_name).dict_()
 
     ray.init(runtime_env={"py_modules": ["AlphaZeroParallel.py"]})
 
