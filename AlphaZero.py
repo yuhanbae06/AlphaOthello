@@ -58,7 +58,8 @@ class MCTS:
                 node = node.select()
                 
             value, is_terminal = self.game.get_value_and_terminated(node.state, node.action_taken)
-            value = self.game.get_opponent_value(value)
+            if self.game.__repr__() != "Othello":
+                    value = self.game.get_opponent_value(value)
             
             if not is_terminal:
                 policy, value = self.model(
@@ -107,7 +108,7 @@ class AlphaZero:
             
             state = self.game.get_next_state(state, action, player)
             
-            value, is_terminal = self.game.get_value_and_terminated(state, action)
+            value, is_terminal = self.game.get_value_and_terminated(self.game.change_perspective(state, player), action)
             
             if is_terminal:
                 returnMemory = []
