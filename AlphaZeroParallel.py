@@ -443,10 +443,10 @@ class AlphaZeroParallelRay:
                 return_memory, return_history = memory_list[i]
                 memory += return_memory
                 # self.add_history(return_history)
-                self.log_scalars('winning_rate', {'win': return_history['win'] / self.args['num_parallel_games'],
+                self.log_scalars(f'winning_rate_{iteration}', {'win': return_history['win'] / self.args['num_parallel_games'],
                                                  'lose': return_history['lose'] / self.args['num_parallel_games'],
                                                  'draw': return_history['draw'] / self.args['num_parallel_games']}, i)
-                self.log_image('final_state', self.game.get_visualized_state(return_history['final_state']), i)
+                self.log_image(f'final_state_{iteration}', self.game.get_visualized_state(return_history['final_state']), i)
                 print(len(return_memory))
                 
             self.model.train()
