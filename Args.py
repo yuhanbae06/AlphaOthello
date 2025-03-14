@@ -38,6 +38,10 @@ class Args:
     def exp1(cls):
         return cls(num_searches=1, num_selfPlay_iterations=5, num_parallel_games=1)
 
+    @classmethod
+    def exp2(cls):
+        return cls(num_searches=200, num_iteration=20, num_selfPlay_iterations=2500, num_parallel_games=125)
+    
     def dict_(self):
         return asdict(self)
 
