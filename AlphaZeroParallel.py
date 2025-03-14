@@ -345,7 +345,7 @@ class AlphaZeroParallelRay:
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
         self.monitor = monitor
-        self.history = dict(win=0, draw=0, lose=0, policy_losses=[], value_losses=[], final_state=[])
+        self.history = dict(win=0, draw=0, lose=0)
         self.log_dir = log_dir
         self.writer = SummaryWriter(log_dir=log_dir)
     
@@ -419,8 +419,8 @@ class AlphaZeroParallelRay:
             value_loss = F.mse_loss(out_value, value_targets)
             loss = policy_loss + value_loss
             if self.monitor:
-                self.history['policy_losses'].append(policy_loss.detach().cpu().item())
-                self.history['value_losses'].append(value_loss.detach().cpu().item())
+#                 self.history['policy_losses'].append(policy_loss.detach().cpu().item())
+#                 self.history['value_losses'].append(value_loss.detach().cpu().item())
                 self.log_scalar("loss_"+str(num_iteration), loss, num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
             
             self.optimizer.zero_grad()
@@ -442,13 +442,16 @@ class AlphaZeroParallelRay:
             for i in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
                 return_memory, return_history = memory_list[i]
                 memory += return_memory
-                # self.add_history(return_history)
+                self.add_history(return_history)
                 self.log_scalars(f'winning_rate_{iteration}', {'win': return_history['win'] / self.args['num_parallel_games'],
                                                  'lose': return_history['lose'] / self.args['num_parallel_games'],
                                                  'draw': return_history['draw'] / self.args['num_parallel_games']}, i)
                 self.log_image(f'final_state_{iteration}', self.game.get_visualized_state(return_history['final_state']), i)
                 print(len(return_memory))
-                
+            
+            self.log_scalars('wining_rate', {'win': self.history['win'] / self.args['num_selfPlay_iterations'],
+                                             'lose': self.history['lose'] / self.args['num_selfPlay_iterations'],
+                                             'draw': self.history['draw'] / self.args['num_selfPlay_iterations']}, iteration)
             self.model.train()
             for epoch in trange(self.args['num_epochs']):
                 self.train(memory, iteration, epoch)
@@ -465,7 +468,8 @@ class AlphaZeroParallelRay:
 
     def add_history(self, return_history):
         for key, value in return_history.items():
-            self.history[key] += value
+            if type(value) is int:
+                self.history[key] += value
 
     def log_scalar(self, tag, value, step):
         self.writer.add_scalar(tag, value, step)
