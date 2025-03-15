@@ -322,6 +322,7 @@ class SelfPlayRay:
                 average_depth += spg.search_depth_average / cnt
                 max_depth *= (cnt - 1) / cnt
                 max_depth += spg.search_depth_max / cnt
+                spg.reset_depth()
                 
                 action_probs = np.zeros(self.game.action_size)
                 for child in spg.root.children:
@@ -512,7 +513,6 @@ class AlphaZeroParallelRay:
         for depth_list in depth_lists:
             length_list.append(len(depth_list))
         length_list = np.array(length_list)
-        print(length_list)
         for i in range(max(length_list)):
             val = 0
             for depth_list in depth_lists:
@@ -546,6 +546,11 @@ class SPG:
         self.memory = []
         self.root = None
         self.node = None
+        self.search_depth_average = 0
+        self.search_depth_num = 0
+        self.search_depth_max = 0
+
+    def reset_depth(self):
         self.search_depth_average = 0
         self.search_depth_num = 0
         self.search_depth_max = 0
