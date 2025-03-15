@@ -52,7 +52,11 @@ class MCTSParallel:
             spg_policy /= np.sum(spg_policy)
 
             spg.root = Node(self.game, self.args, states[i], visit_count=1)
+            spg.root.is_end = True
             spg.root.expand(spg_policy)
+
+            spg.search_depth_average += spg.root.depth
+            spg.search_depth_num += 1
         
         for search in range(self.args['num_searches']):
             for spg in spGames:
@@ -62,11 +66,23 @@ class MCTSParallel:
                 while node.is_fully_expanded():
                     node = node.select()
 
+                if not node.is_terminal:
+                    node.is_end = True
+                    spg.search_depth_max = max(spg.search_depth_max, node.depth)
+                    if node.parent.is_end:
+                        node.parent.is_end = False
+                        spg.search_depth_average += 1 / spg.search_depth_num
+                    else:
+                        spg.search_depth_num += 1
+                        spg.search_depth_average *= (spg.search_depth_num - 1) / spg.search_depth_num
+                        spg.search_depth_average += node.depth / spg.search_depth_num
+
                 value, is_terminal = self.game.get_value_and_terminated(node.state, node.action_taken)
                 if self.game.__repr__() != "Othello":
                     value = self.game.get_opponent_value(value)
                 
                 if is_terminal:
+                    node.is_terminal = True
                     node.backpropagate(value)
                     
                 else:
@@ -283,7 +299,7 @@ class SelfPlayRay:
 
     def play(self):
         return_memory = []
-        return_history = dict(win=0, draw=0, lose=0, final_state=None)
+        return_history = dict(win=0, draw=0, lose=0, final_state=None, average_depth=[], max_depth=[])
         player = 1
         finish_games = 0
         random_number = np.random.randint(self.args['num_parallel_games'])
@@ -294,9 +310,18 @@ class SelfPlayRay:
             neutral_states = self.game.change_perspective(states, player)
             
             self.mcts.search(neutral_states, spGames)
-            
+
+            average_depth = 0
+            max_depth = 0
+            cnt = 0
             for i in range(len(spGames))[::-1]:
                 spg = spGames[i]
+
+                cnt += 1
+                average_depth *= (cnt - 1) / cnt
+                average_depth += spg.search_depth_average / cnt
+                max_depth *= (cnt - 1) / cnt
+                max_depth += spg.search_depth_max / cnt
                 
                 action_probs = np.zeros(self.game.action_size)
                 for child in spg.root.children:
@@ -332,7 +357,10 @@ class SelfPlayRay:
                             hist_outcome
                         ))
                     del spGames[i]
-                    
+
+            return_history['average_depth'].append(average_depth)
+            return_history['max_depth'].append(max_depth)
+            
             player = self.game.get_opponent(player)
             
         return return_memory, return_history
@@ -345,7 +373,7 @@ class AlphaZeroParallelRay:
         self.args = args
         self.mcts = MCTSParallel(game, args, model)
         self.monitor = monitor
-        self.history = dict(win=0, draw=0, lose=0)
+        self.history = dict(win=0, draw=0, lose=0, average_depth=[], max_depth=[])
         self.log_dir = log_dir
         self.writer = SummaryWriter(log_dir=log_dir)
     
@@ -449,6 +477,12 @@ class AlphaZeroParallelRay:
             self.log_scalars('wining_rate', {'win': self.history['win'] / self.args['num_selfPlay_iterations'],
                                              'lose': self.history['lose'] / self.args['num_selfPlay_iterations'],
                                              'draw': self.history['draw'] / self.args['num_selfPlay_iterations']}, iteration)
+            
+            self.history['average_depth'] = self.calculate_average(self.history['average_depth'])
+            self.history['max_depth'] = self.calculate_average(self.history['max_depth'])
+            self.log_list(f'average_depth_{iteration}', self.history['average_depth'])
+            self.log_list(f'max_depth_{iteration}', self.history['max_depth'])
+            
             self.model.train()
             for epoch in trange(self.args['num_epochs']):
                 self.train(memory, iteration, epoch)
@@ -467,12 +501,32 @@ class AlphaZeroParallelRay:
         for key, value in return_history.items():
             if type(value) is int:
                 self.history[key] += value
+            elif type(value) is list:
+                self.history[key].append(value)
+
+    def calculate_average(self, depth_lists):
+        return_list = []
+        length_list = []
+        for depth_list in depth_lists:
+            length_list.append(len(depth_list))
+        length_list = np.array(length_list)
+        for i in range(max(length_list)):
+            val = 0
+            for depth_list in depth_lists:
+                if len(depth_list) > i:
+                    val += depth_list[i]
+            return_list.append(val / sum(length_list > i))
+        return return_list
 
     def log_scalar(self, tag, value, step):
         self.writer.add_scalar(tag, value, step)
     
     def log_scalars(self, tag, values, step):
         self.writer.add_scalars(tag, values, step)
+
+    def log_list(self, tag, value_list):
+        for i in range(len(value_list)):
+            self.writer.add_scalar(tag, value_list[i], i)
 
     def log_image(self, tag, value, step):
         self.writer.add_image(tag, value, step)
@@ -489,3 +543,6 @@ class SPG:
         self.memory = []
         self.root = None
         self.node = None
+        self.search_depth_average = 0
+        self.search_depth_num = 0
+        self.search_depth_max = 0

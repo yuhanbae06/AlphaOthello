@@ -34,6 +34,12 @@ class Node:
         
         self.visit_count = visit_count
         self.value_sum = 0
+        self.is_end = False
+        self.is_terminal = False
+        if parent == None:
+            self.depth = 0
+        else:
+            self.depth = self.parent.depth + 1
         
     def is_fully_expanded(self):
         return len(self.children) > 0
