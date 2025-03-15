@@ -449,7 +449,7 @@ class AlphaZeroParallelRay:
             if self.monitor:
 #                 self.history['policy_losses'].append(policy_loss.detach().cpu().item())
 #                 self.history['value_losses'].append(value_loss.detach().cpu().item())
-                self.log_scalar("loss_"+str(num_iteration), loss, num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
+                self.log_scalar("loss_"+str(num_iteration), loss.detach().cpu().item(), num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -478,24 +478,23 @@ class AlphaZeroParallelRay:
                                              'lose': self.history['lose'] / self.args['num_selfPlay_iterations'],
                                              'draw': self.history['draw'] / self.args['num_selfPlay_iterations']}, iteration)
             
-            self.history['average_depth'] = self.calculate_average(self.history['average_depth'])
-            self.history['max_depth'] = self.calculate_average(self.history['max_depth'])
-            self.log_list(f'average_depth_{iteration}', self.history['average_depth'])
-            self.log_list(f'max_depth_{iteration}', self.history['max_depth'])
+            self.log_list(f'average_depth_{iteration}', self.calculate_average(self.history['average_depth']))
+            self.log_list(f'max_depth_{iteration}', self.calculate_average(self.history['max_depth']))
             
             self.model.train()
             for epoch in trange(self.args['num_epochs']):
                 self.train(memory, iteration, epoch)
 
-            if self.monitor:
-                file = open(f"./saved_history/history_{iteration}_{self.game}.pickle", "wb")
-                pickle.dump(self.history, file)
-                file.close()
-                # print(self.history)
-                self.history = dict(win=0, draw=0, lose=0, policy_losses=[], value_losses=[])
-            
+            # if self.monitor:
+            #     file = open(f"./saved_history/history_{iteration}_{self.game}.pickle", "wb")
+            #     pickle.dump(self.history, file)
+            #     file.close()
+            #     # print(self.history)
+            #     self.history = dict(win=0, draw=0, lose=0, policy_losses=[], value_losses=[])
+
             torch.save(self.model.state_dict(), f"./saved_model/model_{iteration}_{self.game}.pt")
             torch.save(self.optimizer.state_dict(), f"./saved_model/optimizer_{iteration}_{self.game}.pt")
+            self.reset_history()
 
     def add_history(self, return_history):
         for key, value in return_history.items():
@@ -503,6 +502,9 @@ class AlphaZeroParallelRay:
                 self.history[key] += value
             elif type(value) is list:
                 self.history[key].append(value)
+
+    def reset_history(self):
+        self.history = dict(win=0, draw=0, lose=0, average_depth=[], max_depth=[])
 
     def calculate_average(self, depth_lists):
         return_list = []
