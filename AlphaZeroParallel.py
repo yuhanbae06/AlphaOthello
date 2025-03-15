@@ -512,6 +512,7 @@ class AlphaZeroParallelRay:
         for depth_list in depth_lists:
             length_list.append(len(depth_list))
         length_list = np.array(length_list)
+        print(length_list)
         for i in range(max(length_list)):
             val = 0
             for depth_list in depth_lists:
