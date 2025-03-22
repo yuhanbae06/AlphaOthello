@@ -84,8 +84,7 @@ def model_test(game_name):
 def model_learn(game_name, exp_name):
     game = game_dict[game_name]
     
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     model = ResNet(game, 4, 64, device)
     

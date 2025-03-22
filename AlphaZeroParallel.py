@@ -289,7 +289,7 @@ class AlphaZeroParallel:
 
 
 # +
-@ray.remote
+@ray.remote(num_cpus=1, num_gpus=0.05)
 class SelfPlayRay:
     def __init__(self, model, game, args, monitor):
         self.model = model
@@ -465,7 +465,7 @@ class AlphaZeroParallelRay:
             self.model.eval()
 
             distributed_num = self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']
-            actors = [SelfPlayRay.options(num_cpus=os.cpu_count() / distributed_num).remote(self.model, self.game, self.args, self.monitor) for i in range(distributed_num)]
+            actors = [SelfPlayRay.options(num_cpus=os.cpu_count() / distributed_num, num_gpus=1 / distributed_num).remote(self.model, self.game, self.args, self.monitor) for i in range(distributed_num)]
             futures = [actor.play.remote() for actor in actors]
             memory_list = ray.get(futures)
             
