@@ -157,7 +157,6 @@ def model_play(game_name, version):
             break
             
         player = game.get_opponent(player)
-
 # +
 # # %load_ext tensorboard
 # # %tensorboard --logdir logs/ --port=6006
