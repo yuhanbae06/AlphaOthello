@@ -12,6 +12,9 @@
 profile_default/
 ipython_config.py
 
+# vscode settings
+.vscode/
+
 # Remove previous ipynb_checkpoints
 #   git rm -r .ipynb_checkpoints/
 
@@ -212,9 +215,6 @@ $RECYCLE.BIN/
 
 # Ignore ipynb files
 *.ipynb
-
-# Ignore json files
-*.json
 
 # Ignore Ray Test files
 my_module.py
