@@ -213,6 +213,9 @@ $RECYCLE.BIN/
 # Ignore ipynb files
 *.ipynb
 
+# Ignore json files
+*.json
+
 # Ignore Ray Test files
 my_module.py
 my_module2.py
