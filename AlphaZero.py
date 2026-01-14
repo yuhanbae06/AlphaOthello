@@ -1,20 +1,3 @@
-# ---
-# jupyter:
-#   jupytext:
-#     formats: ipynb,py:light
-#     text_representation:
-#       extension: .py
-#       format_name: light
-#       format_version: '1.5'
-#       jupytext_version: 1.16.7
-#   kernelspec:
-#     display_name: AlphaOthello
-#     language: python
-#     name: alphaothello
-# ---
-
-# +
-import import_ipynb
 from Node import Node
 
 import numpy as np
@@ -25,9 +8,6 @@ torch.manual_seed(0)
 
 from tqdm.notebook import trange
 import random
-
-
-# -
 
 class MCTS:
     def __init__(self, game, args, model):

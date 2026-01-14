@@ -1,20 +1,3 @@
-# ---
-# jupyter:
-#   jupytext:
-#     formats: ipynb,py:light
-#     text_representation:
-#       extension: .py
-#       format_name: light
-#       format_version: '1.5'
-#       jupytext_version: 1.16.7
-#   kernelspec:
-#     display_name: AlphaOthello
-#     language: python
-#     name: alphaothello
-# ---
-
-# +
-import import_ipynb
 from Game import *
 from NeuralNet import *
 from Node import *
@@ -42,7 +25,6 @@ import random
 import math
 import ray
 import os
-# -
 
 game_dict = {
     "tictactoe": TicTacToe(),
@@ -157,10 +139,3 @@ def model_play(game_name, version):
             break
             
         player = game.get_opponent(player)
-# +
-# # %load_ext tensorboard
-# # %tensorboard --logdir logs/ --port=6006
-
-# +
-# game_name = "othello"
-# model_learn(game_name, "exp0")
