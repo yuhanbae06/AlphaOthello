@@ -3,7 +3,6 @@ from NeuralNet import *
 from Node import *
 from AlphaZero import *
 from AlphaZeroParallel import *
-# from AlphaZeroParallel import AlphaZeroParallel
 from Args import *
 from utils import *
 
