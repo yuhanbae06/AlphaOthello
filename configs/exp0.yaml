@@ -1,10 +1,10 @@
-C: float = 2
-num_searches: int = 60
-num_iterations: int = 3
-num_selfPlay_iterations: int = 500
-num_parallel_games: int = 100
-num_epochs: int = 4
-batch_size: int = 64
-temperature: float = 1.25
-dirichlet_epsilon: float = 0.25
-dirichlet_alpha: float = 0.3
+C: 2.0
+num_searches: 60
+num_iterations: 3
+num_selfPlay_iterations: 500
+num_parallel_games: 100
+num_epochs: 4
+batch_size: 64
+temperature: 1.25
+dirichlet_epsilon: 0.25
+dirichlet_alpha: 0.3
