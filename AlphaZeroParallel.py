@@ -527,7 +527,7 @@ class AlphaZeroParallelRay:
     def log_image(self, tag, value, step):
         for i in range(len(value)):
             self.writer.add_image(f'{tag}/{step}', value[i], i)
-        wandb.log({f"{tag}": [wandb.Image(img) for img in value]}, step=step)
+        wandb.log({f"{tag}": [wandb.Image(np.transpose(img, (1, 2, 0))) for img in value]}, step=step)
         
     def close_writer(self):
         self.writer.close()
