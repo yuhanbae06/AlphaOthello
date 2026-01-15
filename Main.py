@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 import argparse
 import random
 import math
+import wandb
 import ray
 import os
 
@@ -64,7 +65,7 @@ def model_test(game_name):
     plt.show()
 
 
-def model_learn(game_name, config_name):
+def model_learn(game_name, config_name, exp_name=None):
     game = game_dict[game_name]
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,6 +77,7 @@ def model_learn(game_name, config_name):
     # args = get_args(config_name).dict_()
     args = load_config(f"./configs/{config_name}.yaml")
 
+    wandb.init(entity="AlphaOthello", project="AlphaOthello", name="{0}_{1}_{2}".format(config_name, game.__repr__(), exp_name), config=args)
     context = ray.init(runtime_env={"py_modules": ["AlphaZeroParallel.py"]})
     print(context.dashboard_url)
 
