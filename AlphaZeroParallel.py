@@ -432,7 +432,7 @@ class AlphaZeroParallelRay:
             if self.monitor:
 #                 self.history['policy_losses'].append(policy_loss.detach().cpu().item())
 #                 self.history['value_losses'].append(value_loss.detach().cpu().item())
-                self.log_scalar("loss/"+str(num_iteration), loss.detach().cpu().item(), num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
+                self.log_scalar("loss/"+str(num_iteration), loss.detach().cpu().item(), num_epoch*(len(memory)//self.args['batch_size'])+batchIdx//self.args['batch_size'])
             
             self.optimizer.zero_grad()
             loss.backward()
