@@ -8,6 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.notebook import trange
 import random
 import pickle
+import wandb
 import ray
 import os
 
@@ -431,7 +432,7 @@ class AlphaZeroParallelRay:
             if self.monitor:
 #                 self.history['policy_losses'].append(policy_loss.detach().cpu().item())
 #                 self.history['value_losses'].append(value_loss.detach().cpu().item())
-                self.log_scalar("loss_"+str(num_iteration), loss.detach().cpu().item(), num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
+                self.log_scalar("loss/"+str(num_iteration), loss.detach().cpu().item(), num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -454,19 +455,21 @@ class AlphaZeroParallelRay:
             
             # futures = [self.selfPlay.remote(self) for i in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games'])]
             # memory_list = ray.get(futures)
+            images = []
             for i in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
                 return_memory, return_history = memory_list[i]
                 memory += return_memory
                 self.add_history(return_history)
-                self.log_image(f'final_state_{iteration}', self.game.get_visualized_state(return_history['final_state']), i)
+                images.append(self.game.get_visualized_state(return_history['final_state']))
                 print(len(return_memory))
+            self.log_image(f'images/final_state', images, iteration)
             
             self.log_scalars('wining_rate', {'win': self.history['win'] / self.args['num_selfPlay_iterations'],
                                              'lose': self.history['lose'] / self.args['num_selfPlay_iterations'],
                                              'draw': self.history['draw'] / self.args['num_selfPlay_iterations']}, iteration)
             
-            self.log_list(f'average_depth_{iteration}', self.calculate_average(self.history['average_depth']))
-            self.log_list(f'max_depth_{iteration}', self.calculate_average(self.history['max_depth']))
+            self.log_list(f'average_depth/{iteration}', self.calculate_average(self.history['average_depth']))
+            self.log_list(f'max_depth/{iteration}', self.calculate_average(self.history['max_depth']))
             
             self.model.train()
             for epoch in trange(self.args['num_epochs']):
@@ -509,17 +512,23 @@ class AlphaZeroParallelRay:
 
     def log_scalar(self, tag, value, step):
         self.writer.add_scalar(tag, value, step)
+        wandb.log({tag: value}, step=step)
     
     def log_scalars(self, tag, values, step):
         self.writer.add_scalars(tag, values, step)
+        wandb.log({f"{tag}/{k}": v for k, v in values.items()}, step=step)
 
     def log_list(self, tag, value_list):
         for i in range(len(value_list)):
             self.writer.add_scalar(tag, value_list[i], i)
+        for step, value in enumerate(value_list):
+            wandb.log({f"{tag}": value}, step=step)
 
     def log_image(self, tag, value, step):
-        self.writer.add_image(tag, value, step)
-
+        for i in range(len(value)):
+            self.writer.add_image(f'{tag}/{step}', value[i], i)
+        wandb.log({f"{tag}": [wandb.Image(img) for img in value]}, step=step)
+        
     def close_writer(self):
         self.writer.close()
 
