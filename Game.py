@@ -269,25 +269,25 @@ class Othello:
         return encoded_state
 
     def get_visualized_state(self, state):
-        size = self.interval
-        H = self.row_count * size
-        W = self.column_count * size
-
-        visualized_state = np.zeros((H, W, 3), dtype=np.float32)
-
+        size = 16
+        visualized_state = np.zeros((3, self.row_count*size, self.row_count*size))
         for i in range(self.row_count):
             for j in range(self.column_count):
-                y0, y1 = i * size, (i + 1) * size
-                x0, x1 = j * size, (j + 1) * size
-
-                if state[i, j] == 1:        # black
-                    visualized_state[y0:y1, x0:x1] = [0, 0, 0]
-                elif state[i, j] == 0:      # green
-                    visualized_state[y0:y1, x0:x1] = [0, 1, 0]
-                elif state[i, j] == -1:     # white
-                    visualized_state[y0:y1, x0:x1] = [1, 1, 1]
+                if state[i, j] == 1:
+                    visualized_state[0, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 0
+                    visualized_state[1, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 0
+                    visualized_state[2, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 0
+                elif state[i, j] == 0:
+                    visualized_state[0, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 0
+                    visualized_state[1, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 1
+                    visualized_state[2, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 0
+                elif state[i, j] == -1:
+                    visualized_state[0, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 1
+                    visualized_state[1, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 1
+                    visualized_state[2, i*self.interval:(i+1)*self.interval, j*self.interval:(j+1)*self.interval] = np.ones((self.interval, self.interval)) * 1
 
         return visualized_state
+
 
 class Play:
     def __init__(self):
