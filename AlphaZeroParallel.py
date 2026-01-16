@@ -516,7 +516,7 @@ class AlphaZeroParallelRay:
     
     def log_scalars(self, tag, values, step):
         self.writer.add_scalars(tag, values, step)
-        wandb.log({f"{tag}/{k}": v for k, v in values.items()}, step=step)
+        wandb.log({f"{tag}/{k}": v for k, v in values.items()})
 
     def log_list(self, tag, value_list, x, y):
         for i in range(len(value_list)):
@@ -528,7 +528,7 @@ class AlphaZeroParallelRay:
     def log_image(self, tag, value, step):
         for i in range(len(value)):
             self.writer.add_image(f'{tag}/{step}', value[i], i)
-        wandb.log({f"{tag}": [wandb.Image(np.transpose(img, (1, 2, 0))) for img in value]}, step=step)
+        wandb.log({f"{tag}": [wandb.Image(np.transpose(img, (1, 2, 0))) for img in value]})
         
     def close_writer(self):
         self.writer.close()
