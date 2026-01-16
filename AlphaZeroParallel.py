@@ -414,6 +414,7 @@ class AlphaZeroParallelRay:
                 
     def train(self, memory, num_iteration, num_epoch):
         random.shuffle(memory)
+        losses = []
         for batchIdx in range(0, len(memory), self.args['batch_size']):
             sample = memory[batchIdx:min(len(memory), batchIdx + self.args['batch_size'])] # Change to memory[batchIdx:batchIdx+self.args['batch_size']] in case of an error
             state, policy_targets, value_targets = zip(*sample)
@@ -429,14 +430,13 @@ class AlphaZeroParallelRay:
             policy_loss = F.cross_entropy(out_policy, policy_targets)
             value_loss = F.mse_loss(out_value, value_targets)
             loss = policy_loss + value_loss
-            if self.monitor:
-#                 self.history['policy_losses'].append(policy_loss.detach().cpu().item())
-#                 self.history['value_losses'].append(value_loss.detach().cpu().item())
-                self.log_scalar("loss/"+str(num_iteration), loss.detach().cpu().item(), num_epoch*(len(memory)//self.args['batch_size'])+batchIdx//self.args['batch_size'])
+            losses.append(loss.detach().cpu().item())
             
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
+        if self.monitor:
+            self.log_list(f"loss/{num_iteration}", losses, "batch", "loss")
     
     def learn(self):
         for iteration in range(self.args['num_iterations']):
@@ -468,8 +468,8 @@ class AlphaZeroParallelRay:
                                              'lose': self.history['lose'] / self.args['num_selfPlay_iterations'],
                                              'draw': self.history['draw'] / self.args['num_selfPlay_iterations']}, iteration)
             
-            self.log_list(f'average_depth/{iteration}', self.calculate_average(self.history['average_depth']))
-            self.log_list(f'max_depth/{iteration}', self.calculate_average(self.history['max_depth']))
+            self.log_list(f'average_depth/{iteration}', self.calculate_average(self.history['average_depth']), "move", "average_depth")
+            self.log_list(f'max_depth/{iteration}', self.calculate_average(self.history['max_depth']), "move", "max_depth")
             
             self.model.train()
             for epoch in trange(self.args['num_epochs']):
@@ -518,11 +518,12 @@ class AlphaZeroParallelRay:
         self.writer.add_scalars(tag, values, step)
         wandb.log({f"{tag}/{k}": v for k, v in values.items()}, step=step)
 
-    def log_list(self, tag, value_list):
+    def log_list(self, tag, value_list, x, y):
         for i in range(len(value_list)):
             self.writer.add_scalar(tag, value_list[i], i)
-        for step, value in enumerate(value_list):
-            wandb.log({f"{tag}": value}, step=step)
+        data = [[i, value] for i, value in enumerate(value_list)]
+        table = wandb.Table(data=data, columns=[x, y])
+        wandb.log({f"{tag}": wandb.plot.line(table, x, y, title=tag)})
 
     def log_image(self, tag, value, step):
         for i in range(len(value)):

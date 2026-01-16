@@ -86,6 +86,7 @@ def model_learn(game_name, config_name, exp_name=None):
     alphaZero.learn()
 
     ray.shutdown()
+    wandb.finish()
 
 
 def model_play(game_name, version):
