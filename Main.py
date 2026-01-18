@@ -1,27 +1,10 @@
-# ---
-# jupyter:
-#   jupytext:
-#     formats: ipynb,py:light
-#     text_representation:
-#       extension: .py
-#       format_name: light
-#       format_version: '1.5'
-#       jupytext_version: 1.16.7
-#   kernelspec:
-#     display_name: AlphaOthello
-#     language: python
-#     name: alphaothello
-# ---
-
-# +
-import import_ipynb
 from Game import *
 from NeuralNet import *
 from Node import *
 from AlphaZero import *
 from AlphaZeroParallel import *
-# from AlphaZeroParallel import AlphaZeroParallel
 from Args import *
+from utils import *
 
 import numpy as np
 print(np.__version__)
@@ -38,11 +21,11 @@ torch.manual_seed(0)
 from tqdm.notebook import trange
 
 import matplotlib.pyplot as plt
+import argparse
 import random
 import math
 import ray
 import os
-# -
 
 game_dict = {
     "tictactoe": TicTacToe(),
@@ -81,7 +64,7 @@ def model_test(game_name):
     plt.show()
 
 
-def model_learn(game_name, exp_name):
+def model_learn(game_name, config_name):
     game = game_dict[game_name]
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -90,7 +73,8 @@ def model_learn(game_name, exp_name):
     
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
 
-    args = get_args(exp_name).dict_()
+    # args = get_args(config_name).dict_()
+    args = load_config(f"./configs/{config_name}.yaml")
 
     context = ray.init(runtime_env={"py_modules": ["AlphaZeroParallel.py"]})
     print(context.dashboard_url)
@@ -158,10 +142,26 @@ def model_play(game_name, version):
             
         player = game.get_opponent(player)
 
-# +
-# # %load_ext tensorboard
-# # %tensorboard --logdir logs/ --port=6006
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="mode")
+    # --- 'test' mode ---
+    test_parser = subparsers.add_parser("test")
+    test_parser.add_argument("--game", type=str, default="othello")
+    # --- 'learn' mode ---
+    learn_parser = subparsers.add_parser("learn")
+    learn_parser.add_argument("--game", type=str, default="othello")
+    learn_parser.add_argument("--config", type=str, default="exp0")
+    # --- 'play' mode ---
+    play_parser = subparsers.add_parser("play")
+    play_parser.add_argument("--game", type=str, default="othello")
+    play_parser.add_argument("--version", type=str, default="0")
 
-# +
-# game_name = "othello"
-# model_learn(game_name, "exp0")
+    args = parser.parse_args()
+
+    if args.mode == "test":
+        model_test(args.game)
+    elif args.mode == "learn":
+        model_learn(args.game, args.config)
+    elif args.mode == "play":
+        model_play(args.game, args.version)

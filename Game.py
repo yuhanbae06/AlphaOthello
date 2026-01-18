@@ -1,20 +1,4 @@
-# ---
-# jupyter:
-#   jupytext:
-#     formats: ipynb,py:light
-#     text_representation:
-#       extension: .py
-#       format_name: light
-#       format_version: '1.5'
-#       jupytext_version: 1.16.7
-#   kernelspec:
-#     display_name: AlphaOthello
-#     language: python
-#     name: alphaothello
-# ---
-
 import numpy as np
-
 
 class TicTacToe:
     def __init__(self):

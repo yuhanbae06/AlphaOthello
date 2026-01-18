@@ -1,25 +1,6 @@
-# ---
-# jupyter:
-#   jupytext:
-#     formats: ipynb,py:light
-#     text_representation:
-#       extension: .py
-#       format_name: light
-#       format_version: '1.5'
-#       jupytext_version: 1.16.7
-#   kernelspec:
-#     display_name: AlphaOthello
-#     language: python
-#     name: alphaothello
-# ---
-
-# +
 import numpy as np
 
 import math
-
-
-# -
 
 class Node:
     def __init__(self, game, args, state, parent=None, action_taken=None, prior=0, visit_count=0):
