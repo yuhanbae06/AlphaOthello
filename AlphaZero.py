@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 torch.manual_seed(0)
 
-from tqdm.notebook import trange
+from tqdm import trange
 import random
 
 class MCTS:

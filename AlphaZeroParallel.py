@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
-from tqdm.notebook import trange
+from tqdm import trange
 import random
 import pickle
 import ray
