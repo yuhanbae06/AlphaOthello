@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
-from tqdm import trange
+# from tqdm import range
 import random
 import pickle
 import ray
@@ -243,14 +243,14 @@ class AlphaZeroParallel:
             memory = []
             
             self.model.eval()
-            for selfPlay_iteration in trange(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
+            for selfPlay_iteration in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
                 selfPlayIns = SelfPlay(self.model, self.game, self.args, self.monitor)
                 return_memory, return_history = selfPlayIns.play()
                 memory += return_memory
                 self.add_history(return_history)
                 
             self.model.train()
-            for epoch in trange(self.args['num_epochs']):
+            for epoch in range(self.args['num_epochs']):
                 self.train(memory)
 
             if self.monitor:
@@ -469,7 +469,7 @@ class AlphaZeroParallelRay:
             self.log_list(f'max_depth_{iteration}', self.calculate_average(self.history['max_depth']))
             
             self.model.train()
-            for epoch in trange(self.args['num_epochs']):
+            for epoch in range(self.args['num_epochs']):
                 self.train(memory, iteration, epoch)
 
             # if self.monitor:
