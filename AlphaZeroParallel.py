@@ -414,7 +414,6 @@ class AlphaZeroParallelRay:
                 
     def train(self, memory, num_iteration, num_epoch):
         random.shuffle(memory)
-        losses = []
         for batchIdx in range(0, len(memory), self.args['batch_size']):
             sample = memory[batchIdx:min(len(memory), batchIdx + self.args['batch_size'])] # Change to memory[batchIdx:batchIdx+self.args['batch_size']] in case of an error
             state, policy_targets, value_targets = zip(*sample)
@@ -430,13 +429,15 @@ class AlphaZeroParallelRay:
             policy_loss = F.cross_entropy(out_policy, policy_targets)
             value_loss = F.mse_loss(out_value, value_targets)
             loss = policy_loss + value_loss
-            losses.append(loss.detach().cpu().item())
+            
+            if self.monitor:
+#                 self.history['policy_losses'].append(policy_loss.detach().cpu().item())
+#                 self.history['value_losses'].append(value_loss.detach().cpu().item())
+                self.log_scalar("loss_"+str(num_iteration), loss.detach().cpu().item(), num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
             
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-        if self.monitor:
-            self.log_list(f"loss/{num_iteration}", losses, "batch", "loss")
     
     def learn(self):
         for iteration in range(self.args['num_iterations']):
@@ -512,7 +513,7 @@ class AlphaZeroParallelRay:
 
     def log_scalar(self, tag, value, step):
         self.writer.add_scalar(tag, value, step)
-        wandb.log({tag: value}, step=step)
+        wandb.log({tag: value})
     
     def log_scalars(self, tag, values, step):
         self.writer.add_scalars(tag, values, step)
