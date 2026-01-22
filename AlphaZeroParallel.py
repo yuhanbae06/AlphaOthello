@@ -433,7 +433,7 @@ class AlphaZeroParallelRay:
             if self.monitor:
 #                 self.history['policy_losses'].append(policy_loss.detach().cpu().item())
 #                 self.history['value_losses'].append(value_loss.detach().cpu().item())
-                self.log_scalar("loss_"+str(num_iteration), loss.detach().cpu().item(), num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
+                self.log_scalar(f"loss/{num_iteration}", loss.detach().cpu().item(), num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -469,8 +469,8 @@ class AlphaZeroParallelRay:
                                              'lose': self.history['lose'] / self.args['num_selfPlay_iterations'],
                                              'draw': self.history['draw'] / self.args['num_selfPlay_iterations']}, iteration)
             
-            self.log_list(f'average_depth/{iteration}', self.calculate_average(self.history['average_depth']), "move", "average_depth")
-            self.log_list(f'max_depth/{iteration}', self.calculate_average(self.history['max_depth']), "move", "max_depth")
+            self.log_list(f'average_depth/{iteration}', self.calculate_average(self.history['average_depth']))
+            self.log_list(f'max_depth/{iteration}', self.calculate_average(self.history['max_depth']))
             
             self.model.train()
             for epoch in trange(self.args['num_epochs']):
@@ -519,12 +519,10 @@ class AlphaZeroParallelRay:
         self.writer.add_scalars(tag, values, step)
         wandb.log({f"{tag}/{k}": v for k, v in values.items()})
 
-    def log_list(self, tag, value_list, x, y):
+    def log_list(self, tag, value_list):
         for i in range(len(value_list)):
             self.writer.add_scalar(tag, value_list[i], i)
-        data = [[i, value] for i, value in enumerate(value_list)]
-        table = wandb.Table(data=data, columns=[x, y])
-        wandb.log({f"{tag}": wandb.plot.line(table, x, y, title=tag)})
+            wandb.log({tag: value_list[i]})
 
     def log_image(self, tag, value, step):
         for i in range(len(value)):
