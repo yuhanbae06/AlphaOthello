@@ -431,7 +431,7 @@ class AlphaZeroParallelRay:
             if self.monitor:
 #                 self.history['policy_losses'].append(policy_loss.detach().cpu().item())
 #                 self.history['value_losses'].append(value_loss.detach().cpu().item())
-                self.log_scalar("loss_"+str(num_iteration), loss.detach().cpu().item(), num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
+                self.log_scalar(f"loss/{num_iteration}", loss.detach().cpu().item(), num_epoch*(len(memory)//self.args['batch_size'])+batchIdx/self.args['batch_size'])
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -458,15 +458,15 @@ class AlphaZeroParallelRay:
                 return_memory, return_history = memory_list[i]
                 memory += return_memory
                 self.add_history(return_history)
-                self.log_image(f'final_state_{iteration}', self.game.get_visualized_state(return_history['final_state']), i)
+                self.log_image(f'final_state/{iteration}', self.game.get_visualized_state(return_history['final_state']), i)
                 print(len(return_memory))
             
             self.log_scalars('wining_rate', {'win': self.history['win'] / self.args['num_selfPlay_iterations'],
                                              'lose': self.history['lose'] / self.args['num_selfPlay_iterations'],
                                              'draw': self.history['draw'] / self.args['num_selfPlay_iterations']}, iteration)
             
-            self.log_list(f'average_depth_{iteration}', self.calculate_average(self.history['average_depth']))
-            self.log_list(f'max_depth_{iteration}', self.calculate_average(self.history['max_depth']))
+            self.log_list(f'average_depth/{iteration}', self.calculate_average(self.history['average_depth']))
+            self.log_list(f'max_depth/{iteration}', self.calculate_average(self.history['max_depth']))
             
             self.model.train()
             for epoch in trange(self.args['num_epochs']):
