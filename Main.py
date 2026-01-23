@@ -30,7 +30,8 @@ import os
 game_dict = {
     "tictactoe": TicTacToe(),
     "connectfour": ConnectFour(),
-    "othello": Othello()
+    "othello": Othello(),
+    "gomokunaive": GomokuNaive()
 }
 
 

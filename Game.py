@@ -288,6 +288,103 @@ class Othello:
 
         return visualized_state
 
+class GomokuNaive:
+    def __init__(self):
+        self.row_count = 10
+        self.column_count = 10
+        self.action_size = self.row_count * self.column_count
+        self.interval = 16
+
+    def __repr__(self):
+        return "GomokuNaive"
+
+    def get_initial_state(self):
+        return np.zeros((self.row_count, self.column_count), dtype=int)
+
+    def get_next_state(self, state, action, player):
+        row = action // self.column_count
+        column = action % self.column_count
+        state[row, column] = player
+        return state
+
+
+    def get_valid_moves(self, state):
+        valid_moves = (state.reshape(-1) == 0).astype(np.uint8)
+        return valid_moves
+
+    def get_max_continuous(self, state, r, c, player):
+        max_c = 0
+        directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
+        for dr, dc in directions:
+            count = 1
+            for direction in [1, -1]:
+                nr, nc = r + dr * direction, c + dc * direction
+                while 0 <= nr < self.row_count and 0 <= nc < self.column_count and state[nr, nc] == player:
+                    count += 1
+                    nr += dr * direction
+                    nc += dc * direction
+            max_c = max(max_c, count)
+        return max_c
+
+    def check_win(self, state, action):
+        if action is None:
+            return False
+
+        row = action // self.column_count
+        col = action % self.column_count
+        player = state[row, col]
+        count = self.get_max_continuous(state, row, col, player)
+
+        return count >= 5
+
+    def get_value_and_terminated(self, state, action):
+        if self.check_win(state, action):
+            return 1, True
+        if np.sum(state == 0) == 0:
+            return 0, True
+        return 0, False
+
+    def get_opponent(self, player):
+        return -player
+
+    def change_perspective(self, state, player):
+        return state * player
+
+    def get_encoded_state(self, state):
+        encoded_state = np.stack(
+            (state == -1, state == 0, state == 1)
+        ).astype(np.float32)
+
+        if len(state.shape) == 3:
+            encoded_state = np.swapaxes(encoded_state, 0, 1)
+
+        return encoded_state
+
+    def get_visualized_state(self, state):
+        size = 16
+        visualized_state = np.zeros((3, self.row_count * size, self.row_count * size))
+
+        for i in range(self.row_count):
+            for j in range(self.column_count):
+                r0, r1 = i * self.interval, (i + 1) * self.interval
+                c0, c1 = j * self.interval, (j + 1) * self.interval
+
+                if state[i, j] == 1:
+                    visualized_state[0, r0:r1, c0:c1] = np.ones((self.interval, self.interval)) * 0
+                    visualized_state[1, r0:r1, c0:c1] = np.ones((self.interval, self.interval)) * 0
+                    visualized_state[2, r0:r1, c0:c1] = np.ones((self.interval, self.interval)) * 0
+
+                elif state[i, j] == 0:
+                    visualized_state[0, r0:r1, c0:c1] = np.ones((self.interval, self.interval)) * 0
+                    visualized_state[1, r0:r1, c0:c1] = np.ones((self.interval, self.interval)) * 1
+                    visualized_state[2, r0:r1, c0:c1] = np.ones((self.interval, self.interval)) * 0
+
+                elif state[i, j] == -1:
+                    visualized_state[0, r0:r1, c0:c1] = np.ones((self.interval, self.interval)) * 1
+                    visualized_state[1, r0:r1, c0:c1] = np.ones((self.interval, self.interval)) * 1
+                    visualized_state[2, r0:r1, c0:c1] = np.ones((self.interval, self.interval)) * 1
+
+        return visualized_state
 
 class Play:
     def __init__(self):
