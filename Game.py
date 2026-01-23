@@ -346,6 +346,9 @@ class GomokuNaive:
 
     def get_opponent(self, player):
         return -player
+    
+    def get_opponent_value(self, value):
+        return -value
 
     def change_perspective(self, state, player):
         return state * player
