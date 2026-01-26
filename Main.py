@@ -87,9 +87,8 @@ def model_learn(game_name, config_name):
     ray.shutdown()
 
 
-def model_play(game_name, version):
+def model_play(game_name, version, player = 1):
     game = game_dict[game_name]
-    player = 1
     
     args = {
         'C': 2,
