@@ -1,10 +1,10 @@
 C: 2.0
 num_searches: 200
 num_iterations: 20
-num_selfPlay_iterations: 2500
-num_parallel_games: 125
+num_selfPlay_iterations: 600
+num_parallel_games: 50
 num_epochs: 4
 batch_size: 64
-temperature: 1.25
+temperature: 1
 dirichlet_epsilon: 0.25
 dirichlet_alpha: 0.3
