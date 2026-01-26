@@ -1,5 +1,5 @@
 # AlphaOthello
-Othello AI with AlphaZero algorithm
+AlphaZero algorithm to play board games.
 
 ## 1. Command Line Interface (CLI) 사용법
 
