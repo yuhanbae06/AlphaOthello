@@ -75,7 +75,7 @@ def model_learn(game_name, config_name):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
 
     # args = get_args(config_name).dict_()
-    args = load_config(f"./configs/{config_name}.yaml")
+    args = load_config(f"./configs/learn/{config_name}.yaml")
 
     context = ray.init(runtime_env={"py_modules": ["AlphaZeroParallel.py"]})
     print(context.dashboard_url)
@@ -87,15 +87,17 @@ def model_learn(game_name, config_name):
     ray.shutdown()
 
 
-def model_play(game_name, version, player = 1):
+def model_play(game_name, version, config_name = "play0", player = 1):
     game = game_dict[game_name]
     
-    args = {
-        'C': 2,
-        'num_searches': 1000,
-        'dirichlet_epsilon': 0.,
-        'dirichlet_alpha': 0.3
-    }
+    # args = {
+    #     'C': 2,
+    #     'num_searches': 1000,
+    #     'dirichlet_epsilon': 0.,
+    #     'dirichlet_alpha': 0.3
+    # }
+
+    args = load_config(f"./configs/play/{config_name}.yaml")
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
