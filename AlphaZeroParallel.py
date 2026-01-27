@@ -490,7 +490,10 @@ class AlphaZeroParallelRay:
             torch.save(self.model.state_dict(), f"./saved_model/model_{iteration}_{self.game}.pt")
             torch.save(self.optimizer.state_dict(), f"./saved_model/optimizer_{iteration}_{self.game}.pt")
             self.reset_history()
-
+            
+        for actor in actors:
+            ray.kill(actor)
+    
     def add_history(self, return_history):
         for key, value in return_history.items():
             if type(value) is int:
