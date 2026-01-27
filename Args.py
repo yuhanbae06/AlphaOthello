@@ -5,7 +5,7 @@ class Args:
     C: float = 2
     num_searches: int = 60
     num_iterations: int = 3
-    num_selfPlay_iterations: int = 500
+    num_selfPlay_iterations: int = 700 # for 8 cores CPU
     num_parallel_games: int = 100
     num_epochs: int = 4
     batch_size: int = 64
