@@ -278,6 +278,9 @@ class SelfPlayRay:
         self.mcts = MCTSParallel(game, args, model)
         self.monitor = monitor
 
+    def set_weights(self, weights):
+        self.model.load_state_dict(weights)
+
     def play(self):
         return_memory = []
         return_history = dict(win=0, draw=0, lose=0, final_state=None, average_depth=[], max_depth=[])
@@ -438,23 +441,28 @@ class AlphaZeroParallelRay:
             self.optimizer.step()
     
     def learn(self):
-        for iteration in range(self.args['num_iterations']):
-            
+        distributed_num = self.args["num_selfPlay_iterations"] // self.args["num_parallel_games"]
+        cpu_per_actor = (os.cpu_count() - 1) / distributed_num
+        gpu_per_actor = 1 / distributed_num if torch.cuda.is_available() else 0
+
+        actors = [
+            SelfPlayRay.options(num_cpus=cpu_per_actor, num_gpus=gpu_per_actor).remote(self.model, self.game, self.args, self.monitor) for _ in range(distributed_num)]
+
+        for iteration in range(self.args["num_iterations"]):
+            print(f"Iteration {iteration} Start...")
+
             memory = []
-            
+
+            current_weights = ray.put(self.model.cpu().state_dict())
+            [actor.set_weights.remote(current_weights) for actor in actors]
+
+            self.model.to(self.args['device'])
             self.model.eval()
 
-            distributed_num = self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']
-            actors = [SelfPlayRay.options(num_cpus=os.cpu_count() / distributed_num, num_gpus=1 / distributed_num).remote(self.model, self.game, self.args, self.monitor) for i in range(distributed_num)]
             futures = [actor.play.remote() for actor in actors]
             memory_list = ray.get(futures)
-            
-            for actor in actors:
-                ray.kill(actor)
-            
-            # futures = [self.selfPlay.remote(self) for i in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games'])]
-            # memory_list = ray.get(futures)
-            for i in range(self.args['num_selfPlay_iterations'] // self.args['num_parallel_games']):
+
+            for i in range(distributed_num):
                 return_memory, return_history = memory_list[i]
                 memory += return_memory
                 self.add_history(return_history)
