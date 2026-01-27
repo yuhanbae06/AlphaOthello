@@ -6,5 +6,6 @@ num_parallel_games: 50
 num_epochs: 4
 batch_size: 64
 temperature: 1
+temperature_threshold: 5
 dirichlet_epsilon: 0.25
 dirichlet_alpha: 0.3

@@ -286,10 +286,12 @@ class SelfPlayRay:
         return_history = dict(win=0, draw=0, lose=0, final_state=None, average_depth=[], max_depth=[])
         player = 1
         finish_games = 0
+        moves = 0
         random_number = np.random.randint(self.args['num_parallel_games'])
         spGames = [SPG(self.game) for spg in range(self.args['num_parallel_games'])]
         
         while len(spGames) > 0:
+            moves += 1
             states = np.stack([spg.state for spg in spGames])
             neutral_states = self.game.change_perspective(states, player)
             
@@ -315,9 +317,12 @@ class SelfPlayRay:
 
                 spg.memory.append((spg.root.state, action_probs, player))
 
-                temperature_action_probs = action_probs ** (1 / self.args['temperature'])
-                temperature_action_probs /= np.sum(temperature_action_probs)
-                action = np.random.choice(self.game.action_size, p=temperature_action_probs) # Divide temperature_action_probs with its sum in case of an error
+                if moves > self.args['temperature_threshold']:
+                    action = np.argmax(action_probs)
+                else:
+                    temperature_action_probs = action_probs ** (1 / self.args['temperature'])
+                    temperature_action_probs /= np.sum(temperature_action_probs)
+                    action = np.random.choice(self.game.action_size, p=temperature_action_probs) # Divide temperature_action_probs with its sum in case of an error
 
                 spg.state = self.game.get_next_state(spg.state, action, player)
 
