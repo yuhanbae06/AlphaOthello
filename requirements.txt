@@ -4,3 +4,4 @@ PyYAML==6.0.3
 ray==2.53.0
 torch==2.10.0
 tqdm==4.67.1
+tensorboard==2.20.0
