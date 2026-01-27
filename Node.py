@@ -3,6 +3,21 @@ import numpy as np
 import math
 
 class Node:
+    __slots__ = (
+            "game",
+            "args",
+            "state",
+            "parent",
+            "action_taken",
+            "prior",
+            "visit_count",
+            "value_sum",
+            "children",
+            "is_terminal",
+            "depth",
+            "is_end"
+        )
+
     def __init__(self, game, args, state, parent=None, action_taken=None, prior=0, visit_count=0):
         self.game = game
         self.args = args
