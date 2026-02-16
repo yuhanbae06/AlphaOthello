@@ -220,4 +220,27 @@ $RECYCLE.BIN/
 my_module.py
 my_module2.py
 
+# compiled files
+build/
+bin/
+obj/
+
+# vsc options
+.vscode/
+.vs/
+out/
+
+# external libraries
+libtorch/
+*.dll
+*.lib
+*.pdb
+
+# tmp files
+*.pt
+config.json
+dtd/
+saved_models/
+configs/
+
 # End of https://www.toptal.com/developers/gitignore/api/windows,jupyternotebooks,python
