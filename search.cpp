@@ -193,6 +193,47 @@ int collect_valid_moves(const game::Board& state, std::vector<int>& scratch) {
   return game::get_valid_moves(state, scratch.data());
 }
 
+void target_policy_pruning(std::vector<float>& policy, const int* valid_moves, int valid_count, float threshold_ratio) {
+  if (threshold_ratio <= 0.0f || valid_count <= 0) return;
+
+  float max_p = 0.0f;
+  for (int i = 0; i < valid_count; i++) {
+    max_p = std::max(max_p, policy[static_cast<size_t>(valid_moves[i])]);
+  }
+
+  if (max_p <= 1e-12f) return;
+
+  const float relative_limit = max_p * threshold_ratio;
+
+  float sum = 0.0f;
+  int best_a = valid_moves[0];
+  float actual_max = -1.0f;
+
+  for (int i = 0; i < valid_count; i++) {
+    const int a = valid_moves[i];
+    float& p = policy[static_cast<size_t>(a)];
+
+    if (p >= relative_limit) {
+      sum += p;
+    } else {
+      p = 0.0f;
+    }
+
+    if (p > actual_max) {
+      actual_max = p;
+      best_a = a;
+    }
+  }
+
+  if (sum > 1e-12f) {
+    for (int i = 0; i < valid_count; i++) {
+      policy[static_cast<size_t>(valid_moves[i])] /= sum;
+    }
+  } else {
+    policy[static_cast<size_t>(best_a)] = 1.0f;
+  }
+}
+
 void expand_batch(
     int node_idx,
     std::vector<Node>& tree,
@@ -403,6 +444,13 @@ std::vector<std::vector<float>> run_mcts_batch(
       (*max_leaf_depths)[i] = static_cast<float>(depth_max[i]);
     }
   }
+  for (int i = 0; i < num_roots; ++i) {
+    if (is_full_search[i]) {
+      target_policy_pruning(all_action_probs[i], root_valid_moves[i].data(),
+                            static_cast<int>(root_valid_moves[i].size()), params.target_pruning_threshold);
+    }
+  }
+
   return all_action_probs;
 }
 
