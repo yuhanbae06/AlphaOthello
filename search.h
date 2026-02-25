@@ -16,6 +16,7 @@ struct SearchParams {
   float dirichlet_alpha = 0.3f;
   float target_pruning_threshold = 0.05f;
   float fpu_reduction = 0.2f;
+  float c_base = 19652.0f;
   int parallel_games = 1;
 };
 

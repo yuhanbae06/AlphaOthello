@@ -60,12 +60,12 @@ struct Node {
   float terminal_value = 0.0f;
 };
 
-float ucb_score(const Node& child, const SearchParams& params, float sqrt_parent_visits, float parent_q) {
+float ucb_score(const Node& child, const SearchParams& params, float sqrt_parent_visits, float parent_q, float dynamic_cpuct) {
   const float q = (child.visit_count == 0)
                       ? (parent_q - params.fpu_reduction)
                       : -(child.value_sum / static_cast<float>(child.visit_count));
   const float u =
-      params.cpuct * child.prior *
+      dynamic_cpuct * child.prior *
       (sqrt_parent_visits / static_cast<float>(child.visit_count + 1));
   return q + u;
 }
@@ -79,8 +79,11 @@ int select_child(int node_idx, const std::vector<Node>& tree, const SearchParams
   const float sqrt_parent_visits =
       std::sqrt(static_cast<float>(std::max(parent.visit_count, 1)));
 
+  const float dynamic_cpuct = params.cpuct + std::log((parent.visit_count + params.c_base + 1.0f) / params.c_base);
+  const float parent_q = (parent.visit_count > 0) ? (parent.value_sum / static_cast<float>(parent.visit_count)) : 0.0f;
+
   for (int i = start; i < end; i++) {
-    const float score = ucb_score(tree[static_cast<size_t>(i)], params, sqrt_parent_visits);
+    const float score = ucb_score(tree[static_cast<size_t>(i)], params, sqrt_parent_visits, parent_q, dynamic_cpuct);
     if (score > best_score) {
       best_score = score;
       best_idx = i;
