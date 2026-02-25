@@ -6,11 +6,25 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-file(GLOB CPP_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+set(GAME_IMPL "gomoku" CACHE STRING "Game implementation to compile (gomoku or quoridor)")
+set_property(CACHE GAME_IMPL PROPERTY STRINGS gomoku quoridor)
+
+if(GAME_IMPL STREQUAL "gomoku")
+  set(GAME_SOURCE gomoku.cpp)
+  add_compile_definitions(GAME_IMPL_GOMOKU)
+elseif(GAME_IMPL STREQUAL "quoridor")
+  set(GAME_SOURCE quoridor.cpp)
+  add_compile_definitions(GAME_IMPL_QUORIDOR)
+else()
+  message(FATAL_ERROR "Unsupported GAME_IMPL='${GAME_IMPL}'. Use gomoku or quoridor.")
+endif()
 
 add_executable(
   cpp_selfplay
-  ${CPP_SOURCES}
+  main.cpp
+  search.cpp
+  onnx_infer.cpp
+  ${GAME_SOURCE}
 )
 
 target_compile_options(cpp_selfplay PRIVATE -O3 -march=native -ffast-math -flto)

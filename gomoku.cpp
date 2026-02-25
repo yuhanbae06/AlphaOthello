@@ -65,19 +65,9 @@ int get_valid_moves(const Board& board, int* moves_out) {
   return count;
 }
 
-MoveList valid_moves(const Board& board) {
-  static thread_local int scratch[kActionSize];
-  const int count = get_valid_moves(board, scratch);
-  return {scratch, count};
-}
-
 bool is_full(const Board& board) {
-  for (int i = 0; i < kActionSize; i++) {
-    if (board[static_cast<size_t>(i)] == 0) {
-      return false;
-    }
-  }
-  return true;
+  static thread_local int scratch[kActionSize];
+  return get_valid_moves(board, scratch) == 0;
 }
 
 bool apply_move(Board& board, int action, int8_t player) {
@@ -123,4 +113,3 @@ void to_board_plane(const Board& board, std::vector<int8_t>& out_plane) {
 int encoded_state_size() { return kInputChannels * kActionSize; }
 
 }  // namespace gomoku
-

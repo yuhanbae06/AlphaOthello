@@ -8,14 +8,13 @@
 #include <string>
 #include <thread>
 
-#include "game.h"
 #include "onnx_infer.h"
+#include "game.h"
 #include "search.h"
 
 namespace {
 
 struct CliArgs {
-  std::string game_name = "gomoku";
   std::string onnx_path;
   std::string out_path;
   std::string stats_out_path;
@@ -37,7 +36,7 @@ struct CliArgs {
 
 void print_usage() {
   std::cout
-      << "Usage: ./cpp_selfplay --game <gomoku|quoridor> --onnx <model.onnx> --out <memory.bin> --games <N>"
+      << "Usage: ./cpp_selfplay --onnx <model.onnx> --out <memory.bin> --games <N>"
       << " --searches <M> --cpuct <C> --temp <T> --threads <K> --seed <S>"
       << " [--temp-early <T0>] [--temp-halflife <H>]"
       << " --dirichlet-epsilon <E> --dirichlet-alpha <A>"
@@ -67,9 +66,7 @@ CliArgs parse_args(int argc, char** argv) {
       return argv[i];
     };
 
-    if (key == "--game") {
-      args.game_name = next("--game");
-    } else if (key == "--onnx") {
+    if (key == "--onnx") {
       args.onnx_path = next("--onnx");
     } else if (key == "--out") {
       args.out_path = next("--out");
@@ -141,7 +138,6 @@ int main(int argc, char** argv) {
     };
 
     const CliArgs cli = parse_args(argc, argv);
-    const game::Config game_cfg = game::make_config(cli.game_name);
 
     SearchParams params;
     params.num_searches = cli.searches;
@@ -156,7 +152,6 @@ int main(int argc, char** argv) {
     const auto all_start = std::chrono::steady_clock::now();
     const auto infer_init_start = std::chrono::steady_clock::now();
     OnnxInfer infer(
-        game_cfg,
         cli.onnx_path,
         cli.use_cuda,
         cli.cuda_device_id,
@@ -164,22 +159,21 @@ int main(int argc, char** argv) {
     const auto infer_init_end = std::chrono::steady_clock::now();
 
     const auto selfplay_start = std::chrono::steady_clock::now();
-    SelfplayResult result = run_selfplay_games(
-        infer, game_cfg, params, cli.games, cli.threads, cli.seed);
+    SelfplayResult result = run_selfplay_games(infer, params, cli.games, cli.threads, cli.seed);
     const auto selfplay_end = std::chrono::steady_clock::now();
 
     const auto write_memory_start = std::chrono::steady_clock::now();
-    write_memory_file(cli.out_path, result.rows, game_cfg);
+    write_memory_file(cli.out_path, result.rows);
     const auto write_memory_end = std::chrono::steady_clock::now();
 
     const auto write_stats_start = std::chrono::steady_clock::now();
     if (!cli.stats_out_path.empty()) {
-      write_stats_file(cli.stats_out_path, result.stats, game_cfg);
+      write_stats_file(cli.stats_out_path, result.stats);
     }
     const auto write_stats_end = std::chrono::steady_clock::now();
     const auto all_end = std::chrono::steady_clock::now();
 
-    std::cout << "game: " << game_cfg.name << "\n";
+    std::cout << "game: " << kGameName << "\n";
     std::cout << "generated rows: " << result.rows.size() << "\n";
     std::cout << "win/draw/lose: " << result.stats.win << "/" << result.stats.draw << "/"
               << result.stats.lose << "\n";

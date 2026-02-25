@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 
-#include "game.h"
 #include "onnx_infer.h"
 
 struct SearchParams {
@@ -50,7 +49,6 @@ struct SelfplayResult {
 
 SelfplayResult run_selfplay_games(
     OnnxInfer& infer,
-    const game::Config& game_cfg,
     const SearchParams& params,
     int num_games,
     int num_threads,
@@ -58,11 +56,8 @@ SelfplayResult run_selfplay_games(
 
 void write_memory_file(
     const std::string& path,
-    const std::vector<TrainingRow>& rows,
-    const game::Config& game_cfg);
+    const std::vector<TrainingRow>& rows);
 
 void write_stats_file(
     const std::string& path,
-    const SelfplayStats& stats,
-    const game::Config& game_cfg);
-
+    const SelfplayStats& stats);
