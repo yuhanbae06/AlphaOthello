@@ -60,9 +60,9 @@ struct Node {
   float terminal_value = 0.0f;
 };
 
-float ucb_score(const Node& child, const SearchParams& params, float sqrt_parent_visits) {
+float ucb_score(const Node& child, const SearchParams& params, float sqrt_parent_visits, float parent_q) {
   const float q = (child.visit_count == 0)
-                      ? 0.0f
+                      ? (parent_q - params.fpu_reduction)
                       : -(child.value_sum / static_cast<float>(child.visit_count));
   const float u =
       params.cpuct * child.prior *
