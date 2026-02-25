@@ -60,17 +60,17 @@ struct Node {
   float terminal_value = 0.0f;
 };
 
-float ucb_score(const Node& child, float cpuct, float sqrt_parent_visits) {
+float ucb_score(const Node& child, const SearchParams& params, float sqrt_parent_visits) {
   const float q = (child.visit_count == 0)
                       ? 0.0f
                       : -(child.value_sum / static_cast<float>(child.visit_count));
   const float u =
-      cpuct * child.prior *
+      params.cpuct * child.prior *
       (sqrt_parent_visits / static_cast<float>(child.visit_count + 1));
   return q + u;
 }
 
-int select_child(int node_idx, const std::vector<Node>& tree, float cpuct) {
+int select_child(int node_idx, const std::vector<Node>& tree, const SearchParams& params) {
   int best_idx = -1;
   float best_score = -1e30f;
   const Node& parent = tree[static_cast<size_t>(node_idx)];
@@ -80,7 +80,7 @@ int select_child(int node_idx, const std::vector<Node>& tree, float cpuct) {
       std::sqrt(static_cast<float>(std::max(parent.visit_count, 1)));
 
   for (int i = start; i < end; i++) {
-    const float score = ucb_score(tree[static_cast<size_t>(i)], cpuct, sqrt_parent_visits);
+    const float score = ucb_score(tree[static_cast<size_t>(i)], params, sqrt_parent_visits);
     if (score > best_score) {
       best_score = score;
       best_idx = i;
@@ -364,7 +364,7 @@ std::vector<std::vector<float>> run_mcts_batch(
       int curr = root_indices[i];
       int depth = 0;
       while (tree[static_cast<size_t>(curr)].num_children > 0) {
-        curr = select_child(curr, tree, params.cpuct);
+        curr = select_child(curr, tree, params);
         if (curr < 0) {
           break;
         }
