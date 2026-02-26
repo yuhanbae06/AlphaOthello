@@ -61,9 +61,14 @@ struct Node {
 };
 
 float ucb_score(const Node& child, const SearchParams& params, float sqrt_parent_visits, float parent_q, float dynamic_cpuct) {
-  const float q = (child.visit_count == 0)
-                      ? (parent_q - params.fpu_reduction)
-                      : -(child.value_sum / static_cast<float>(child.visit_count));
+  float q;
+  if (params.use_fpu) {
+    q = (child.visit_count == 0) ? (parent_q - params.fpu_reduction)
+                                             : -(child.value_sum / static_cast<float>(child.visit_count));
+  } else {
+    q = (child.visit_count == 0) ? 0.0f : -(child.value_sum / static_cast<float>(child.visit_count));
+  }
+
   const float u =
       dynamic_cpuct * child.prior *
       (sqrt_parent_visits / static_cast<float>(child.visit_count + 1));
@@ -79,7 +84,7 @@ int select_child(int node_idx, const std::vector<Node>& tree, const SearchParams
   const float sqrt_parent_visits =
       std::sqrt(static_cast<float>(std::max(parent.visit_count, 1)));
 
-  const float dynamic_cpuct = params.cpuct + std::log((parent.visit_count + params.c_base + 1.0f) / params.c_base);
+  const float dynamic_cpuct = params.use_dynamic_cpuct ? params.cpuct + std::log((parent.visit_count + params.c_base + 1.0f) / params.c_base) : params.cpuct;
   const float parent_q = (parent.visit_count > 0) ? (parent.value_sum / static_cast<float>(parent.visit_count)) : 0.0f;
 
   for (int i = start; i < end; i++) {
@@ -447,13 +452,13 @@ std::vector<std::vector<float>> run_mcts_batch(
       (*max_leaf_depths)[i] = static_cast<float>(depth_max[i]);
     }
   }
-  for (int i = 0; i < num_roots; ++i) {
-    if (is_full_search[i]) {
-      target_policy_pruning(all_action_probs[i], root_valid_moves[i].data(),
-                            static_cast<int>(root_valid_moves[i].size()), params.target_pruning_threshold);
-    }
+  if (params.use_target_pruning){
+    for (int i = 0; i < num_roots; ++i) {
+      if (is_full_search[i]) {
+        target_policy_pruning(all_action_probs[i], root_valid_moves[i].data(),
+                              static_cast<int>(root_valid_moves[i].size()), params.target_pruning_threshold);
+      }
   }
-
   return all_action_probs;
 }
 

@@ -19,6 +19,10 @@ struct SearchParams {
   float c_base = 19652.0f;
   int parallel_games = 1;
   int pcr_full_search_prob = 25;
+
+  bool use_target_pruning = true;
+  bool use_fpu = true;
+  bool use_dynamic_cpuct = true;
 };
 
 struct TrainingRow {

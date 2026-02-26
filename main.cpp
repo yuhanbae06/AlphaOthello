@@ -33,6 +33,10 @@ struct CliArgs {
   uint64_t seed = 0;
   float dirichlet_epsilon = 0.25f;
   float dirichlet_alpha = 0.3f;
+  bool use_pcr = true;
+  bool use_target_pruning = true;
+  bool use_fpu = true;
+  bool use_dynamic_cpuct = true;
 };
 
 void print_usage() {
@@ -104,7 +108,14 @@ CliArgs parse_args(int argc, char** argv) {
       args.dirichlet_epsilon = std::stof(next("--dirichlet-epsilon"));
     } else if (key == "--dirichlet-alpha") {
       args.dirichlet_alpha = std::stof(next("--dirichlet-alpha"));
-    } else if (key == "--help" || key == "-h") {
+    } else if (key == "--no-target-pruning") {
+      args.use_target_pruning = false;
+    } else if (key == "--no-fpu") {
+      args.use_fpu = false;
+    } else if (key == "--no-dynamic-cpuct") {
+      args.use_dynamic_cpuct = false;
+    }
+    else if (key == "--help" || key == "-h") {
       print_usage();
       std::exit(0);
     } else {
@@ -154,6 +165,9 @@ int main(int argc, char** argv) {
     params.dirichlet_alpha = cli.dirichlet_alpha;
     params.parallel_games = cli.parallel_games;
     params.pcr_full_search_prob = cli.pcr_full_search_prob;
+    params.use_dynamic_cpuct = cli.use_dynamic_cpuct;
+    params.use_fpu = cli.use_fpu;
+    params.use_target_pruning = cli.use_target_pruning;
 
     const auto all_start = std::chrono::steady_clock::now();
     const auto infer_init_start = std::chrono::steady_clock::now();
