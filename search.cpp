@@ -452,12 +452,13 @@ std::vector<std::vector<float>> run_mcts_batch(
       (*max_leaf_depths)[i] = static_cast<float>(depth_max[i]);
     }
   }
-  if (params.use_target_pruning){
+  if (params.use_target_pruning) {
     for (int i = 0; i < num_roots; ++i) {
       if (is_full_search[i]) {
         target_policy_pruning(all_action_probs[i], root_valid_moves[i].data(),
                               static_cast<int>(root_valid_moves[i].size()), params.target_pruning_threshold);
       }
+    }
   }
   return all_action_probs;
 }
