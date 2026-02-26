@@ -72,6 +72,10 @@ class AlphaZeroParallel:
         use_fpu = bool(self.args.get("use_fpu", True))
         use_dynamic_cpuct = bool(self.args.get("use_dynamic_cpuct", True))
 
+        fpu_reduction = float(self.args.get("fpu_reduction", 0.2))
+        c_base = float(self.args.get("c_base", 19652.0))
+        target_pruning_threshold = float(self.args.get("target_pruning_threshold", 0.05))
+
         cmd = [
             cpp_bin,
             "--onnx",
@@ -106,6 +110,12 @@ class AlphaZeroParallel:
             str(self.args["dirichlet_epsilon"]),
             "--dirichlet-alpha",
             str(self.args["dirichlet_alpha"]),
+            "--target-pruning-threshold",
+            str(target_pruning_threshold),
+            "--fpu-reduction",
+            str(fpu_reduction),
+            "--c-base",
+            str(c_base),
         ]
         if use_cuda:
             cmd.extend(["--use-cuda", "--cuda-device-id", str(cuda_device_id)])
