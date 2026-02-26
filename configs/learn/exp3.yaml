@@ -3,9 +3,12 @@ num_searches: 60
 num_iterations: 3
 num_selfPlay_iterations: 100 
 num_parallel_games: 32
+pcr_full_search_prob: 100
 num_epochs: 4
 batch_size: 64
-temperature: 1.25
+temperature: 0.15
+temperature_early: 0.75
+temperature_halflife: 19
 dirichlet_epsilon: 0.25
 dirichlet_alpha: 0.3
 cpp_selfplay_path: ./build/cpp_selfplay
@@ -13,3 +16,8 @@ cpp_threads: 4
 cpp_nn_max_batch_size: 32
 cpp_use_cuda: true
 cpp_cuda_device_id: 0
+replay_memory_iters: 4
+use_fpu: false
+use_target_pruning: false
+use_dynamic_cpuct: false
+

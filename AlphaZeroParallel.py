@@ -68,6 +68,10 @@ class AlphaZeroParallel:
         seed = int(seed_base + iteration)
         pcr_full_search_prob = int(self.args.get("pcr_full_search_prob", 25))
 
+        use_target_pruning = bool(self.args.get("use_target_pruning", True))
+        use_fpu = bool(self.args.get("use_fpu", True))
+        use_dynamic_cpuct = bool(self.args.get("use_dynamic_cpuct", True))
+
         cmd = [
             cpp_bin,
             "--onnx",
@@ -105,7 +109,13 @@ class AlphaZeroParallel:
         ]
         if use_cuda:
             cmd.extend(["--use-cuda", "--cuda-device-id", str(cuda_device_id)])
-
+        if not use_target_pruning:
+            cmd.append("--no-target-pruning")
+        if not use_fpu:
+            cmd.append("--no-fpu")
+        if not use_dynamic_cpuct:
+            cmd.append("--no-dynamic-cpuct")
+        
         start_t = time.time()
         subprocess.run(cmd, check=True)
         end_t = time.time()
