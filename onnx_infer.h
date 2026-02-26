@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "game.h"
+#include "games/game.h"
 
 class OnnxInfer {
  public:
@@ -25,26 +25,24 @@ class OnnxInfer {
   };
 
   OnnxInfer(
-      const game::Config& game_cfg,
       const std::string& model_path,
       bool use_cuda,
       int cuda_device_id,
       int max_batch_size);
   ~OnnxInfer();
 
-  std::pair<std::vector<float>, float> infer(const game::State& canonical_state);
+  std::pair<std::vector<float>, float> infer(const game::Board& canonical_state);
   std::vector<std::pair<std::vector<float>, float>> infer_batch(
-      const std::vector<game::State>& canonical_states);
+      const std::vector<game::Board>& canonical_states);
   InferProfile profile_snapshot() const;
 
  private:
   void run_batch_direct(
-      const std::vector<game::State>& canonical_states,
+      const std::vector<game::Board>& canonical_states,
       size_t begin,
       size_t count,
       std::vector<std::pair<std::vector<float>, float>>& outputs);
 
-  game::Config game_cfg_;
   Ort::Env env_;
   Ort::SessionOptions session_options_;
   Ort::Session session_;

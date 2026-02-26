@@ -1,36 +1,0 @@
-OnnxInfer: CUDA provider enabled (device_id=0)
-generated rows: 20612
-win/draw/lose: 258/0/242
-output: ./tmp_cpp_selfplay/memory_0.bin
-stats: ./tmp_cpp_selfplay/stats_0.bin
-[profile] cpp total=111.1044s infer_init=0.2552s selfplay=110.8326s write_memory=0.0157s write_stats=0.0008s
-[profile] search games=500 mcts_calls=20612 infer_calls=1220721 mcts_total=1057.8759s infer_total=906.3404s mcts_other=151.5355s game_total=33987.1203s
-[profile] nn query_count=1220721 batch_count=36914 item_count=1220721 bind_io=2.0774s input_build=2.5965s ort_run=896.5101s ort_output_fetch=0.0063s softmax=3.8961s writeback=0.1178s postprocess=4.1805s
-[learn] cpp selfplay iteration=0 elapsed=111.24s
-train iter 0:   0%|          | 0/4 [00:00<?, ?it/s]train iter 0:  25%|██▌       | 1/4 [00:03<00:10,  3.44s/it]train iter 0:  50%|█████     | 2/4 [00:06<00:06,  3.18s/it]train iter 0:  75%|███████▌  | 3/4 [00:09<00:03,  3.12s/it]train iter 0: 100%|██████████| 4/4 [00:12<00:00,  3.01s/it]train iter 0: 100%|██████████| 4/4 [00:12<00:00,  3.08s/it]
-OnnxInfer: CUDA provider enabled (device_id=0)
-generated rows: 21431
-win/draw/lose: 251/0/249
-output: ./tmp_cpp_selfplay/memory_1.bin
-stats: ./tmp_cpp_selfplay/stats_1.bin
-[profile] cpp total=122.0690s infer_init=0.2621s selfplay=121.7867s write_memory=0.0195s write_stats=0.0007s
-[profile] search games=500 mcts_calls=21431 infer_calls=1262060 mcts_total=1152.0779s infer_total=993.8946s mcts_other=158.1832s game_total=37590.8049s
-[profile] nn query_count=1262060 batch_count=38940 item_count=1262060 bind_io=2.2245s input_build=2.7549s ort_run=983.4706s ort_output_fetch=0.0073s softmax=4.1198s writeback=0.1236s postprocess=4.4188s
-[profile][iter 0] onnx_export=0.086s selfplay=111.245s load_memory=0.205s load_stats=0.002s monitor_log=0.041s train=12.324s save=0.031s total=123.934s rows=20612 rows_per_sec=185.3
-[profile][iter 0] train_epoch_sec min/avg/max=2.842/3.081/3.440
-[learn] cpp selfplay iteration=1 elapsed=122.23s
-train iter 1:   0%|          | 0/4 [00:00<?, ?it/s]train iter 1:  25%|██▌       | 1/4 [00:03<00:10,  3.49s/it]train iter 1:  50%|█████     | 2/4 [00:06<00:06,  3.48s/it]train iter 1:  75%|███████▌  | 3/4 [00:10<00:03,  3.71s/it]train iter 1: 100%|██████████| 4/4 [00:15<00:00,  3.85s/it]train iter 1: 100%|██████████| 4/4 [00:15<00:00,  3.76s/it]
-OnnxInfer: CUDA provider enabled (device_id=0)
-generated rows: 19831
-win/draw/lose: 271/0/229
-output: ./tmp_cpp_selfplay/memory_2.bin
-stats: ./tmp_cpp_selfplay/stats_2.bin
-[profile] cpp total=116.1814s infer_init=0.2495s selfplay=115.9152s write_memory=0.0159s write_stats=0.0008s
-[profile] search games=500 mcts_calls=19831 infer_calls=1169093 mcts_total=1143.7505s infer_total=994.0839s mcts_other=149.6666s game_total=37390.9111s
-[profile] nn query_count=1169093 batch_count=36259 item_count=1169093 bind_io=2.1739s input_build=2.5325s ort_run=984.2608s ort_output_fetch=0.0075s softmax=3.8107s writeback=0.1161s postprocess=4.0876s
-[profile][iter 1] onnx_export=0.099s selfplay=122.233s load_memory=0.249s load_stats=0.003s monitor_log=0.041s train=15.021s save=0.036s total=137.682s rows=21431 rows_per_sec=175.3
-[profile][iter 1] train_epoch_sec min/avg/max=3.481/3.755/4.064
-[learn] cpp selfplay iteration=2 elapsed=116.33s
-train iter 2:   0%|          | 0/4 [00:00<?, ?it/s]train iter 2:  25%|██▌       | 1/4 [00:03<00:10,  3.40s/it]train iter 2:  50%|█████     | 2/4 [00:06<00:06,  3.47s/it]train iter 2:  75%|███████▌  | 3/4 [00:10<00:03,  3.44s/it]train iter 2: 100%|██████████| 4/4 [00:13<00:00,  3.43s/it]train iter 2: 100%|██████████| 4/4 [00:13<00:00,  3.43s/it]
-[profile][iter 2] onnx_export=0.079s selfplay=116.329s load_memory=0.208s load_stats=0.003s monitor_log=0.044s train=13.731s save=0.036s total=130.430s rows=19831 rows_per_sec=170.5
-[profile][iter 2] train_epoch_sec min/avg/max=3.400/3.432/3.512

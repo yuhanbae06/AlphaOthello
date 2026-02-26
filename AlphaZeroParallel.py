@@ -49,27 +49,8 @@ class AlphaZeroParallel:
         )
         self.model.to(original_device)
 
-    def _maybe_convert_onnx_fp16(self, onnx_path):
-        if not bool(self.args.get("cpp_onnx_fp16", False)):
-            return onnx_path
-
-        try:
-            import onnx
-            from onnxconverter_common import float16
-        except Exception as e:
-            raise RuntimeError(
-                "cpp_onnx_fp16=true requires `onnx` and `onnxconverter-common` "
-                "(pip install onnx onnxconverter-common)"
-            ) from e
-
-        fp16_path = onnx_path.replace(".onnx", "_fp16.onnx")
-        model = onnx.load(onnx_path)
-        model_fp16 = float16.convert_float_to_float16(model, keep_io_types=True)
-        onnx.save(model_fp16, fp16_path)
-        return fp16_path
-
     def _run_cpp_selfplay(self, onnx_path, memory_path, stats_path, iteration):
-        cpp_bin = self.args.get("cpp_selfplay_path", "./cpp_selfplay")
+        cpp_bin = self.args.get("cpp_selfplay_path", "./build/cpp_selfplay")
         threads = int(self.args.get("cpp_threads", 0))
         nn_max_batch_size = int(self.args.get("cpp_nn_max_batch_size", 64))
         use_cuda = bool(self.args.get("cpp_use_cuda", torch.cuda.is_available()))
@@ -83,14 +64,12 @@ class AlphaZeroParallel:
                 "temperature_halflife", self.args.get("chosenMoveTemperatureHalflife", 19.0)
             )
         )
-        game_name = str(self.args.get("game", "gomoku")).lower()
         seed_base = self.args.get("seed", 0)
         seed = int(seed_base + iteration)
+        pcr_full_search_prob = int(self.args.get("pcr_full_search_prob", 25))
 
         cmd = [
             cpp_bin,
-            "--game",
-            game_name,
             "--onnx",
             onnx_path,
             "--out",
@@ -101,6 +80,8 @@ class AlphaZeroParallel:
             str(self.args["num_selfPlay_iterations"]),
             "--parallel-games",
             str(self.args.get("num_parallel_games", 1)),
+            "--pcr-full-search-prob",
+            str(pcr_full_search_prob),
             "--searches",
             str(self.args["num_searches"]),
             "--cpuct",
@@ -329,7 +310,15 @@ class AlphaZeroParallel:
         os.makedirs("./saved_model", exist_ok=True)
         os.makedirs(self.log_dir, exist_ok=True)
 
-        for iteration in range(self.args["num_iterations"]):
+        total_iterations = int(self.args["num_iterations"])
+        start_iteration = max(0, int(self.args.get("start_iteration", 0)))
+        if start_iteration >= total_iterations:
+            raise ValueError(
+                f"start_iteration ({start_iteration}) must be smaller than "
+                f"num_iterations ({total_iterations})"
+            )
+
+        for iteration in range(start_iteration, total_iterations):
             iteration_start = time.perf_counter()
             onnx_path = f"./tmp_cpp_selfplay/model_{iteration}.onnx"
             memory_path = f"./tmp_cpp_selfplay/memory_{iteration}.bin"
@@ -337,7 +326,6 @@ class AlphaZeroParallel:
 
             t0 = time.perf_counter()
             self._export_onnx(onnx_path)
-            onnx_path = self._maybe_convert_onnx_fp16(onnx_path)
             onnx_export_sec = time.perf_counter() - t0
 
             t0 = time.perf_counter()

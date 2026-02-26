@@ -308,7 +308,8 @@ bool is_move_blocked(const State& state, int from, int to) {
 }
 
 // Valid move generation
-int get_valid_moves(State& state, int* moves_out) {
+int get_valid_moves(const State& in_state, int* moves_out) {
+  State state = in_state;
   int count = 0;
   const int p_idx = state.turn;
   const int opp_idx = 1 - p_idx;
