@@ -20,16 +20,6 @@ struct State {
 
 using Board = State;
 
-struct MoveList {
-  const int* data = nullptr;
-  int count = 0;
-  int size() const { return count; }
-  bool empty() const { return count == 0; }
-  int operator[](int i) const { return data[i]; }
-  const int* begin() const { return data; }
-  const int* end() const { return data + count; }
-};
-
 struct BridgeMask {
   uint64_t h_mask;
   uint64_t v_mask;
@@ -49,7 +39,7 @@ constexpr int WALLS_LEFT = 5;
 
 State get_initial_state();
 State apply_action(const State& state, int action_idx);
-int get_valid_moves(State& state, int* moves_out);
+int get_valid_moves(const State& state, int* moves_out);
 bool check_win(const State& state, int p_idx);
 State change_perspective(const State& state, int player);
 
@@ -64,14 +54,10 @@ inline State canonical_board(const State& state, int8_t player) {
 
 inline State flipped_perspective(const State& state) { return change_perspective(state, 1); }
 
-inline MoveList valid_moves(const State& state) {
+inline bool is_full(const State& state) {
   static thread_local int scratch[ACTION_SIZE];
-  State tmp = state;
-  const int count = get_valid_moves(tmp, scratch);
-  return {scratch, count};
+  return get_valid_moves(state, scratch) == 0;
 }
-
-inline bool is_full(const State& state) { return valid_moves(state).empty(); }
 
 inline bool apply_move(State& state, int action, int8_t player) {
   state.turn = (player == 1) ? 0 : 1;
@@ -120,4 +106,3 @@ inline void to_board_plane(const State& state, std::vector<int8_t>& out_plane) {
 }
 
 }  // namespace Quoridor
-

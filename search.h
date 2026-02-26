@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 
-#include "game.h"
 #include "onnx_infer.h"
 
 struct SearchParams {
@@ -15,7 +14,15 @@ struct SearchParams {
   float temperature_halflife = 19.0f;
   float dirichlet_epsilon = 0.25f;
   float dirichlet_alpha = 0.3f;
+  float target_pruning_threshold = 0.05f;
+  float fpu_reduction = 0.2f;
+  float c_base = 19652.0f;
   int parallel_games = 1;
+  int pcr_full_search_prob = 25;
+
+  bool use_target_pruning = true;
+  bool use_fpu = true;
+  bool use_dynamic_cpuct = true;
 };
 
 struct TrainingRow {
@@ -50,7 +57,6 @@ struct SelfplayResult {
 
 SelfplayResult run_selfplay_games(
     OnnxInfer& infer,
-    const game::Config& game_cfg,
     const SearchParams& params,
     int num_games,
     int num_threads,
@@ -58,11 +64,8 @@ SelfplayResult run_selfplay_games(
 
 void write_memory_file(
     const std::string& path,
-    const std::vector<TrainingRow>& rows,
-    const game::Config& game_cfg);
+    const std::vector<TrainingRow>& rows);
 
 void write_stats_file(
     const std::string& path,
-    const SelfplayStats& stats,
-    const game::Config& game_cfg);
-
+    const SelfplayStats& stats);

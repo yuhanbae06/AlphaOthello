@@ -229,10 +229,14 @@ tmp_cpp_selfplay/
 # Ignore log files
 logs/
 
+# Ignore run profiles
+run_profiles/
+
 # Ignore Build File
 cpp_selfplay
 
 # Ignore WSL Build Files
 build_wsl/
+build_wsl_quoridor/
 
 # End of https://www.toptal.com/developers/gitignore/api/windows,jupyternotebooks,python

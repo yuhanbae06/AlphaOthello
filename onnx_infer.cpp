@@ -42,13 +42,11 @@ std::vector<float> softmax_logits(const float* logits, int len) {
 }  // namespace
 
 OnnxInfer::OnnxInfer(
-    const game::Config& game_cfg,
     const std::string& model_path,
     bool use_cuda,
     int cuda_device_id,
     int max_batch_size)
-    : game_cfg_(game_cfg),
-      env_(ORT_LOGGING_LEVEL_WARNING, "cpp_selfplay"),
+    : env_(ORT_LOGGING_LEVEL_WARNING, "cpp_selfplay"),
       session_options_(),
       session_(nullptr),
       cpu_memory_info_(
@@ -93,13 +91,13 @@ OnnxInfer::OnnxInfer(
     if (shape.size() != 4) {
       throw std::runtime_error("ONNX input must be rank-4 [N,C,H,W]");
     }
-    if (shape[1] > 0 && shape[1] != game_cfg_.input_channels) {
+    if (shape[1] > 0 && shape[1] != game::kInputChannels) {
       throw std::runtime_error("ONNX channel mismatch with selected game");
     }
-    if (shape[2] > 0 && shape[2] != game_cfg_.board_size) {
+    if (shape[2] > 0 && shape[2] != game::kBoardSize) {
       throw std::runtime_error("ONNX height mismatch with selected game");
     }
-    if (shape[3] > 0 && shape[3] != game_cfg_.board_size) {
+    if (shape[3] > 0 && shape[3] != game::kBoardSize) {
       throw std::runtime_error("ONNX width mismatch with selected game");
     }
     if (!shape.empty() && shape[0] > 0) {
@@ -152,7 +150,7 @@ OnnxInfer::OnnxInfer(
 OnnxInfer::~OnnxInfer() = default;
 
 void OnnxInfer::run_batch_direct(
-    const std::vector<game::State>& canonical_states,
+    const std::vector<game::Board>& canonical_states,
     size_t begin,
     size_t count,
     std::vector<std::pair<std::vector<float>, float>>& outputs) {
@@ -171,12 +169,12 @@ void OnnxInfer::run_batch_direct(
     thread_local std::vector<float> value_output_data;
     thread_local std::vector<float> encoded_state;
 
-    const int encoded_size = game::encoded_state_size(game_cfg_);
+    const int encoded_size = game::encoded_state_size();
     const size_t input_elem_count =
         static_cast<size_t>(batch_size) * static_cast<size_t>(encoded_size);
     const size_t policy_elem_count =
         static_cast<size_t>(batch_size) *
-        static_cast<size_t>(game_cfg_.action_size);
+        static_cast<size_t>(game::kActionSize);
 
     std::vector<int64_t> value_output_shape = value_output_shape_template_;
     value_output_shape[0] = batch_size;
@@ -197,7 +195,7 @@ void OnnxInfer::run_batch_direct(
     input_data.assign(input_elem_count, 0.0f);
     for (int b = 0; b < batch_size; b++) {
       game::encode_state(
-          game_cfg_, canonical_states[begin + static_cast<size_t>(b)], encoded_state);
+          canonical_states[begin + static_cast<size_t>(b)], encoded_state);
       if (static_cast<int>(encoded_state.size()) != encoded_size) {
         throw std::runtime_error("encode_state returned unexpected size");
       }
@@ -218,8 +216,8 @@ void OnnxInfer::run_batch_direct(
     value_output_data.resize(value_elem_count);
 
     std::array<int64_t, 4> input_shape = {
-        batch_size, game_cfg_.input_channels, game_cfg_.board_size, game_cfg_.board_size};
-    std::array<int64_t, 2> policy_shape = {batch_size, game_cfg_.action_size};
+        batch_size, game::kInputChannels, game::kBoardSize, game::kBoardSize};
+    std::array<int64_t, 2> policy_shape = {batch_size, game::kActionSize};
     Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
         cpu_memory_info_, input_data.data(), input_data.size(), input_shape.data(),
         input_shape.size());
@@ -268,9 +266,9 @@ void OnnxInfer::run_batch_direct(
     for (int b = 0; b < batch_size; b++) {
       const float* row_logits =
           policy_logits +
-          static_cast<size_t>(b) * static_cast<size_t>(game_cfg_.action_size);
+          static_cast<size_t>(b) * static_cast<size_t>(game::kActionSize);
       const auto softmax_start = std::chrono::steady_clock::now();
-      std::vector<float> probs = softmax_logits(row_logits, game_cfg_.action_size);
+      std::vector<float> probs = softmax_logits(row_logits, game::kActionSize);
       const auto softmax_end = std::chrono::steady_clock::now();
       worker_softmax_ns_.fetch_add(
           static_cast<uint64_t>(
@@ -299,8 +297,8 @@ void OnnxInfer::run_batch_direct(
   } catch (const std::exception& e) {
     std::cerr << "OnnxInfer direct inference failure: " << e.what() << "\n";
     const std::vector<float> uniform(
-        static_cast<size_t>(game_cfg_.action_size),
-        1.0f / static_cast<float>(game_cfg_.action_size));
+        static_cast<size_t>(game::kActionSize),
+        1.0f / static_cast<float>(game::kActionSize));
     for (size_t i = 0; i < count; i++) {
       outputs[begin + i] = {uniform, 0.0f};
     }
@@ -308,13 +306,13 @@ void OnnxInfer::run_batch_direct(
 }
 
 std::pair<std::vector<float>, float> OnnxInfer::infer(
-    const game::State& canonical_state) {
-  const auto batch_outputs = infer_batch(std::vector<game::State>{canonical_state});
+    const game::Board& canonical_state) {
+  const auto batch_outputs = infer_batch(std::vector<game::Board>{canonical_state});
   return batch_outputs[0];
 }
 
 std::vector<std::pair<std::vector<float>, float>> OnnxInfer::infer_batch(
-    const std::vector<game::State>& canonical_states) {
+    const std::vector<game::Board>& canonical_states) {
   std::vector<std::pair<std::vector<float>, float>> outputs;
   if (canonical_states.empty()) {
     return outputs;
@@ -348,3 +346,4 @@ OnnxInfer::InferProfile OnnxInfer::profile_snapshot() const {
   p.worker_postprocess_ns = worker_postprocess_ns_.load(std::memory_order_relaxed);
   return p;
 }
+

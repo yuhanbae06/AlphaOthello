@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,6 +14,24 @@ from utils import load_config
 
 
 torch.manual_seed(0)
+
+
+def _infer_last_iteration_from_model_path(model_path):
+    filename = os.path.basename(model_path)
+    match = re.search(r"^model_(\d+)_.*\.pt$", filename)
+    if match is None:
+        raise ValueError(
+            f"Could not infer iteration from model filename '{filename}'. "
+            "Expected format like model_43_Quoridor.pt"
+        )
+    return int(match.group(1))
+
+
+def _default_optimizer_path_from_model_path(model_path):
+    dirname = os.path.dirname(model_path)
+    filename = os.path.basename(model_path)
+    optimizer_name = re.sub(r"^model_", "optimizer_", filename)
+    return os.path.join(dirname, optimizer_name)
 
 
 def model_test():
@@ -39,7 +58,7 @@ def model_test():
     plt.show()
 
 
-def model_learn(config_name):
+def model_learn(config_name, resume_model=None, resume_optimizer=None, resume_iter=None):
     args = load_config(f"./configs/learn/{config_name}.yaml")
     game_name = args.get("game", "gomoku")
     game = make_game(game_name)
@@ -49,6 +68,32 @@ def model_learn(config_name):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
     args["device"] = str(device)
     args["game"] = game_name
+
+    if resume_model:
+        if not os.path.exists(resume_model):
+            raise FileNotFoundError(f"resume model not found: {resume_model}")
+
+        model.load_state_dict(torch.load(resume_model, map_location=device))
+
+        if resume_iter is None:
+            last_iteration = _infer_last_iteration_from_model_path(resume_model)
+        else:
+            last_iteration = int(resume_iter)
+        args["start_iteration"] = last_iteration + 1
+
+        optimizer_path = resume_optimizer
+        if optimizer_path is None:
+            optimizer_path = _default_optimizer_path_from_model_path(resume_model)
+        if os.path.exists(optimizer_path):
+            optimizer.load_state_dict(torch.load(optimizer_path, map_location=device))
+            print(f"[learn] resumed optimizer from: {optimizer_path}")
+        else:
+            print(f"[learn] optimizer checkpoint not found, using fresh optimizer: {optimizer_path}")
+
+        print(
+            f"[learn] resumed model from: {resume_model} "
+            f"(last_iteration={last_iteration}, start_iteration={args['start_iteration']})"
+        )
 
     trainer = AlphaZeroParallel(model, optimizer, game, args, monitor=True)
     trainer.learn()
@@ -105,6 +150,24 @@ if __name__ == "__main__":
     test_parser = subparsers.add_parser("test")
     learn_parser = subparsers.add_parser("learn")
     learn_parser.add_argument("--config", type=str, default="exp0")
+    learn_parser.add_argument(
+        "--resume-model",
+        type=str,
+        default=None,
+        help="Path to existing model checkpoint (e.g. ./saved_model/model_43_Quoridor.pt)",
+    )
+    learn_parser.add_argument(
+        "--resume-optimizer",
+        type=str,
+        default=None,
+        help="Optional optimizer checkpoint path. Defaults to matching optimizer_<iter>_*.pt",
+    )
+    learn_parser.add_argument(
+        "--resume-iter",
+        type=int,
+        default=None,
+        help="Override last completed iteration index (default: inferred from --resume-model filename)",
+    )
     play_parser = subparsers.add_parser("play")
     play_parser.add_argument("--version", type=str, default="0")
     play_parser.add_argument("--config", type=str, default="play0")
@@ -115,6 +178,6 @@ if __name__ == "__main__":
     if args.mode == "test":
         model_test()
     elif args.mode == "learn":
-        model_learn(args.config)
+        model_learn(args.config, args.resume_model, args.resume_optimizer, args.resume_iter)
     elif args.mode == "play":
         model_play(args.version, args.config, args.human_player)
