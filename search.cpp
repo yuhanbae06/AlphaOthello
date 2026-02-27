@@ -48,16 +48,16 @@ class ScopedAddNs {
 
 struct Node {
   game::Board state{};
+  float value_sum = 0.0f;
+  float terminal_value = 0.0f;
+  float prior = 0.0f;
   int parent = -1;
   int first_child = -1;
   int num_children = 0;
   int action_taken = -1;
-  float prior = 0.0f;
   int visit_count = 0;
-  float value_sum = 0.0f;
   bool terminal_known = false;
   bool terminal = false;
-  float terminal_value = 0.0f;
 };
 
 float ucb_score(const Node& child, const SearchParams& params, float sqrt_parent_visits, float parent_q, float dynamic_cpuct) {
@@ -128,14 +128,16 @@ void backpropagate(int node_idx, std::vector<Node>& tree, float value) {
   }
 }
 
-std::vector<float> masked_normalized_policy(
+void masked_normalized_policy(
     const std::vector<float>& policy,
     int action_size,
     const int* valid_moves,
-    int valid_count) {
-  std::vector<float> out(static_cast<size_t>(action_size), 0.0f);
+    int valid_count,
+    std::vector<float>& out) {
+  out.assign(static_cast<size_t>(action_size), 0.0f);
+
   if (valid_count <= 0) {
-    return out;
+    return;
   }
 
   double sum = 0.0;
@@ -152,14 +154,13 @@ std::vector<float> masked_normalized_policy(
       const int a = valid_moves[i];
       out[static_cast<size_t>(a)] = uniform;
     }
-    return out;
   }
 
+  const float inv_sum = 1.0f / static_cast<float>(sum);
   for (int i = 0; i < valid_count; i++) {
     const int a = valid_moves[i];
-    out[static_cast<size_t>(a)] = static_cast<float>(out[static_cast<size_t>(a)] / sum);
+    out[static_cast<size_t>(a)] = static_cast<float>(out[static_cast<size_t>(a)] * inv_sum);
   }
-  return out;
 }
 
 void apply_dirichlet_noise(
@@ -182,8 +183,11 @@ void apply_dirichlet_noise(
   if (sum <= 1e-12f) {
     return;
   }
+
+  const float inv_sum = 1.0f / sum;
+
   for (int i = 0; i < valid_count; i++) {
-    noise[i] /= sum;
+    noise[i] *= inv_sum;
   }
 
   for (int i = 0; i < valid_count; i++) {
@@ -219,8 +223,10 @@ void apply_shaped_dirichlet_noise(
     return;
   }
 
-  for (int i = 0; i < valid_count; ++i) {
-    noise[i] /= sum;
+  const float inv_sum = 1.0f / sum;
+
+  for (int i = 0; i < valid_count; i++) {
+    noise[i] *= inv_sum;
   }
 
   for (int i = 0; i < valid_count; ++i) {
@@ -269,8 +275,9 @@ void target_policy_pruning(std::vector<float>& policy, const int* valid_moves, i
   }
 
   if (sum > 1e-12f) {
+    const float inv_sum = 1.0f / sum;
     for (int i = 0; i < valid_count; i++) {
-      policy[static_cast<size_t>(valid_moves[i])] /= sum;
+      policy[static_cast<size_t>(valid_moves[i])] *= inv_sum;
     }
   } else {
     policy[static_cast<size_t>(best_a)] = 1.0f;
@@ -326,7 +333,7 @@ std::vector<std::pair<std::vector<float>, float>> infer_batch_with_profile(
   return results;
 }
 
-std::vector<std::vector<float>> run_mcts_batch(
+void run_mcts_batch(
     OnnxInfer& infer,
     const std::vector<game::Board>& canonical_roots,
     const SearchParams& params,
@@ -335,13 +342,22 @@ std::vector<std::vector<float>> run_mcts_batch(
     std::vector<float>* average_leaf_depths,
     std::vector<float>* max_leaf_depths,
     std::vector<Node>& tree,
-    const std::vector<bool>& is_full_search,
+    std::vector<std::vector<float>>& all_action_probs,
+    const std::vector<uint8_t>& is_full_search,
     const std::vector<int>& target_searches) {
+  
   const size_t num_roots = canonical_roots.size();
-  std::vector<std::vector<float>> all_action_probs(
-      num_roots, std::vector<float>(static_cast<size_t>(game::kActionSize), 0.0f));
+
+  if (all_action_probs.size() < num_roots) {
+    all_action_probs.resize(num_roots);
+  }
+
+  for (size_t i = 0; i < num_roots; ++i) {
+    all_action_probs[i].assign(game::kActionSize, 0.0f);
+  }
+
   if (num_roots == 0) {
-    return all_action_probs;
+    return;
   }
 
   ScopedAddNs mcts_timer(profile ? &profile->mcts_total_ns : nullptr);
@@ -350,7 +366,29 @@ std::vector<std::vector<float>> run_mcts_batch(
   }
 
   tree.clear();
-  std::vector<int> root_indices(num_roots);
+  thread_local std::vector<int> root_indices;
+  thread_local std::vector<std::vector<int>> root_valid_moves;
+  thread_local std::vector<int> valid_scratch;
+  thread_local std::vector<int> depth_sum;
+  thread_local std::vector<int> depth_max;
+  thread_local std::vector<int> depth_count;
+  thread_local std::vector<int> curr_leaves;
+  thread_local std::vector<game::Board> states_to_infer;
+  thread_local std::vector<int> game_indices_to_infer;
+  
+  root_indices.resize(num_roots); 
+  depth_sum.assign(num_roots, 0);
+  depth_max.assign(num_roots, 0);
+  depth_count.assign(num_roots, 0);
+  curr_leaves.assign(num_roots, -1);
+  root_valid_moves.resize(num_roots);
+
+  if (valid_scratch.size() < static_cast<size_t>(game::kActionSize)) {
+    valid_scratch.resize(static_cast<size_t>(game::kActionSize), 0);
+  }
+
+  states_to_infer.clear();
+  game_indices_to_infer.clear();
 
   for (size_t i = 0; i < num_roots; i++) {
     Node root;
@@ -360,19 +398,21 @@ std::vector<std::vector<float>> run_mcts_batch(
     tree.push_back(std::move(root));
   }
 
-  std::vector<std::vector<int>> root_valid_moves(num_roots);
-  std::vector<int> valid_scratch(static_cast<size_t>(game::kActionSize), 0);
   const auto root_evals = infer_batch_with_profile(infer, canonical_roots, profile);
+
+  thread_local std::vector<float> root_policy;
+  thread_local std::vector<float> root_policy_buffer;
+
   for (size_t i = 0; i < num_roots; i++) {
     const int valid_count =
         collect_valid_moves(tree[static_cast<size_t>(root_indices[i])].state, valid_scratch);
     root_valid_moves[i].assign(valid_scratch.begin(), valid_scratch.begin() + valid_count);
-    std::vector<float> root_policy = masked_normalized_policy(
-        root_evals[i].first, game::kActionSize, root_valid_moves[i].data(), valid_count);
+    masked_normalized_policy(
+        root_evals[i].first, game::kActionSize, root_valid_moves[i].data(), valid_count, root_policy_buffer);
     if (is_full_search[i]) {
       if (params.use_shaped_dirichlet) {
         apply_shaped_dirichlet_noise(
-          root_policy,
+          root_policy_buffer,
           root_valid_moves[i].data(),
           valid_count,
           params.dirichlet_epsilon,
@@ -380,7 +420,7 @@ std::vector<std::vector<float>> run_mcts_batch(
           rng);
       } else {
         apply_dirichlet_noise(
-          root_policy,
+          root_policy_buffer,
           root_valid_moves[i].data(),
           valid_count,
           params.dirichlet_epsilon,
@@ -388,24 +428,17 @@ std::vector<std::vector<float>> run_mcts_batch(
           rng);
       }
     }
-    root_policy = masked_normalized_policy(
-        root_policy, game::kActionSize, root_valid_moves[i].data(), valid_count);
+    masked_normalized_policy(
+        root_policy_buffer, game::kActionSize, root_valid_moves[i].data(), valid_count, root_policy);
     expand_batch(root_indices[i], tree, root_policy);
   }
-
-  std::vector<int> depth_sum(num_roots, 0);
-  std::vector<int> depth_max(num_roots, 0);
-  std::vector<int> depth_count(num_roots, 0);
-  std::vector<int> curr_leaves(num_roots, -1);
-  std::vector<game::Board> states_to_infer;
-  std::vector<int> game_indices_to_infer;
-  states_to_infer.reserve(num_roots);
-  game_indices_to_infer.reserve(num_roots);
 
   int max_searches = 0;
   for (int ts : target_searches) {
     max_searches = std::max(max_searches, ts);
   }
+  
+  thread_local std::vector<float> leaf_policy;
 
   for (int s = 0; s < max_searches; s++) {
     states_to_infer.clear();
@@ -447,10 +480,9 @@ std::vector<std::vector<float>> run_mcts_batch(
         const int leaf_idx = curr_leaves[static_cast<size_t>(game_idx)];
         const int valid_count =
             collect_valid_moves(tree[static_cast<size_t>(leaf_idx)].state, valid_scratch);
-        std::vector<float> policy =
             masked_normalized_policy(
-                evals[j].first, game::kActionSize, valid_scratch.data(), valid_count);
-        expand_batch(leaf_idx, tree, policy);
+                evals[j].first, game::kActionSize, valid_scratch.data(), valid_count, leaf_policy);
+        expand_batch(leaf_idx, tree, leaf_policy);
         backpropagate(leaf_idx, tree, evals[j].second);
       }
     }
@@ -477,8 +509,11 @@ std::vector<std::vector<float>> run_mcts_batch(
       }
       continue;
     }
+
+    float inv_sum_visits = 1.0f / sum_visits;
+
     for (int a = 0; a < game::kActionSize; a++) {
-      all_action_probs[i][static_cast<size_t>(a)] /= sum_visits;
+      all_action_probs[i][static_cast<size_t>(a)] *= inv_sum_visits;
     }
   }
 
@@ -505,7 +540,6 @@ std::vector<std::vector<float>> run_mcts_batch(
       }
     }
   }
-  return all_action_probs;
 }
 
 
@@ -544,8 +578,11 @@ int sample_action(
     std::uniform_int_distribution<int> dist(0, valid_count - 1);
     return valid_moves[static_cast<size_t>(dist(rng))];
   }
+
+  const float inv_sum = 1.0f / sum;
+
   for (double& w : weights) {
-    w /= sum;
+    w *= inv_sum;
   }
   std::discrete_distribution<int> dist(weights.begin(), weights.end());
   return valid_moves[static_cast<size_t>(dist(rng))];
@@ -654,11 +691,15 @@ SelfplayResult run_selfplay_games(
       std::vector<Node> thread_tree_pool;
       thread_tree_pool.reserve(
           static_cast<size_t>(params.num_searches * parallel_games_per_worker * 20));
+      std::vector<std::vector<float>> all_action_probs;
       std::vector<ActiveGame> active_games;
       active_games.reserve(static_cast<size_t>(parallel_games_per_worker));
       std::vector<game::Board> canonical_states;
       std::vector<int> target_searches;
-      std::vector<bool> is_full_search;
+      std::vector<uint8_t> is_full_search;
+      std::vector<float> average_depths;
+      std::vector<float> max_depths;
+
       const size_t max_p_games = static_cast<size_t>(parallel_games_per_worker);
       canonical_states.reserve(max_p_games);
       target_searches.reserve(max_p_games);
@@ -703,19 +744,18 @@ SelfplayResult run_selfplay_games(
           target_searches[i] = full_search ? params.num_searches : reduced;
         }
 
-        std::vector<float> average_depths;
-        std::vector<float> max_depths;
-        const auto all_action_probs = run_mcts_batch(
-            infer,
-            canonical_states,
-            params,
-            rng,
-            &atomic_profile,
-            &average_depths,
-            &max_depths,
-            thread_tree_pool,
-            is_full_search,
-            target_searches);
+        run_mcts_batch(
+          infer,
+          canonical_states,
+          params,
+          rng,
+          &atomic_profile,
+          &average_depths,
+          &max_depths,
+          thread_tree_pool,
+          all_action_probs,
+          is_full_search,
+          target_searches);
 
         for (int i = static_cast<int>(active_games.size()) - 1; i >= 0; i--) {
           ActiveGame& game_inst = active_games[static_cast<size_t>(i)];

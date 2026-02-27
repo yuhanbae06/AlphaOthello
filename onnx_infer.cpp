@@ -10,10 +10,9 @@
 
 namespace {
 
-std::vector<float> softmax_logits(const float* logits, int len) {
-  std::vector<float> probs(static_cast<size_t>(len), 0.0f);
+void softmax_logits(const float* logits, int len, float* out_probs) {
   if (len <= 0) {
-    return probs;
+    return;
   }
   float max_logit = logits[0];
   for (int i = 1; i < len; i++) {
@@ -22,21 +21,21 @@ std::vector<float> softmax_logits(const float* logits, int len) {
 
   double sum = 0.0;
   for (int i = 0; i < len; i++) {
-    probs[static_cast<size_t>(i)] =
-        static_cast<float>(std::exp(static_cast<double>(logits[i] - max_logit)));
-    sum += probs[static_cast<size_t>(i)];
+    out_probs[i] =
+        static_cast<float>(std::exp(logits[i] - max_logit));
+    sum += out_probs[i];
   }
 
-  if (sum <= 0.0) {
+ if (sum <= 1e-12) {
     const float uniform = 1.0f / static_cast<float>(len);
-    std::fill(probs.begin(), probs.end(), uniform);
-    return probs;
+    std::fill(out_probs, out_probs + len, uniform);
+    return;
   }
+  
+  const float inv_sum = 1.0f / static_cast<float>(sum);
   for (int i = 0; i < len; i++) {
-    probs[static_cast<size_t>(i)] =
-        static_cast<float>(probs[static_cast<size_t>(i)] / sum);
+    out_probs[i] *= inv_sum;
   }
-  return probs;
 }
 
 }  // namespace
@@ -192,7 +191,7 @@ void OnnxInfer::run_batch_direct(
     }
 
     const auto input_build_start = std::chrono::steady_clock::now();
-    input_data.assign(input_elem_count, 0.0f);
+    input_data.resize(input_elem_count);
     for (int b = 0; b < batch_size; b++) {
       game::encode_state(
           canonical_states[begin + static_cast<size_t>(b)], encoded_state);
@@ -268,7 +267,9 @@ void OnnxInfer::run_batch_direct(
           policy_logits +
           static_cast<size_t>(b) * static_cast<size_t>(game::kActionSize);
       const auto softmax_start = std::chrono::steady_clock::now();
-      std::vector<float> probs = softmax_logits(row_logits, game::kActionSize);
+      auto& target_pair = outputs[begin + static_cast<size_t>(b)];
+      target_pair.first.resize(static_cast<size_t>(game::kActionSize));
+      softmax_logits(row_logits, game::kActionSize, target_pair.first.data());
       const auto softmax_end = std::chrono::steady_clock::now();
       worker_softmax_ns_.fetch_add(
           static_cast<uint64_t>(
@@ -278,8 +279,7 @@ void OnnxInfer::run_batch_direct(
           std::memory_order_relaxed);
 
       const auto write_start = std::chrono::steady_clock::now();
-      outputs[begin + static_cast<size_t>(b)] = {
-          std::move(probs), value_ptr[static_cast<size_t>(b) * value_stride]};
+      target_pair.second = value_ptr[static_cast<size_t>(b) * value_stride];
       const auto write_end = std::chrono::steady_clock::now();
       worker_writeback_ns_.fetch_add(
           static_cast<uint64_t>(
