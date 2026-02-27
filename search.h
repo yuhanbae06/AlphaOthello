@@ -24,6 +24,7 @@ struct SearchParams {
   bool use_target_pruning = true;
   bool use_fpu = true;
   bool use_dynamic_cpuct = true;
+  bool use_shaped_dirichlet = true;
 };
 
 struct TrainingRow {

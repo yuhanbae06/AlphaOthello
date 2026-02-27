@@ -37,6 +37,7 @@ struct CliArgs {
   bool use_target_pruning = true;
   bool use_fpu = true;
   bool use_dynamic_cpuct = true;
+  bool use_shaped_dirichlet = true;
   float fpu_reduction = 0.2f;
   float c_base = 19652.0f;
   float target_pruning_threshold = 0.05f;
@@ -120,6 +121,8 @@ CliArgs parse_args(int argc, char** argv) {
       args.use_fpu = false;
     } else if (key == "--no-dynamic-cpuct") {
       args.use_dynamic_cpuct = false;
+    } else if (key == "--no-shaped-dirichlet") {
+      args.use_shaped_dirichlet = false;
     } else if (key == "--fpu-reduction") {
       args.fpu_reduction = std::stof(next("--fpu-reduction"));
     } else if (key == "--c-base") {
@@ -183,6 +186,7 @@ int main(int argc, char** argv) {
     params.use_dynamic_cpuct = cli.use_dynamic_cpuct;
     params.use_fpu = cli.use_fpu;
     params.use_target_pruning = cli.use_target_pruning;
+    params.use_shaped_dirichlet = cli.use_shaped_dirichlet;
     params.fpu_reduction = cli.fpu_reduction;
     params.c_base = cli.c_base;
     params.target_pruning_threshold = cli.target_pruning_threshold;

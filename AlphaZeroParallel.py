@@ -72,6 +72,7 @@ class AlphaZeroParallel:
         use_target_pruning = bool(self.args.get("use_target_pruning", True))
         use_fpu = bool(self.args.get("use_fpu", True))
         use_dynamic_cpuct = bool(self.args.get("use_dynamic_cpuct", True))
+        use_shaped_dirichlet = bool(self.args.get("use_shaped_dirichlet", True))
 
         fpu_reduction = float(self.args.get("fpu_reduction", 0.2))
         c_base = float(self.args.get("c_base", 19652.0))
@@ -128,6 +129,8 @@ class AlphaZeroParallel:
             cmd.append("--no-fpu")
         if not use_dynamic_cpuct:
             cmd.append("--no-dynamic-cpuct")
+        if not use_shaped_dirichlet:
+            cmd.append("--no-shaped-dirichlet")
         
         start_t = time.time()
         subprocess.run(cmd, check=True)

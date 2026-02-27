@@ -171,8 +171,7 @@ void apply_dirichlet_noise(
     std::mt19937& rng) {
   if (epsilon <= 0.0f || valid_count <= 0) {
     return;
-  }
-
+  }  
   std::gamma_distribution<float> gamma(alpha, 1.0f);
   std::vector<float> noise(static_cast<size_t>(valid_count), 0.0f);
   float sum = 0.0f;
@@ -191,6 +190,42 @@ void apply_dirichlet_noise(
     const int a = valid_moves[i];
     policy[static_cast<size_t>(a)] =
         (1.0f - epsilon) * policy[static_cast<size_t>(a)] + epsilon * noise[i];
+  }
+}
+
+void apply_shaped_dirichlet_noise(
+    std::vector<float>& policy,
+    const int* valid_moves,
+    int valid_count,
+    float epsilon,
+    float alpha,
+    std::mt19937& rng) {
+  float const total_alpha = alpha * static_cast<float>(valid_count);
+
+  std::vector<float> noise(static_cast<size_t>(valid_count), 0.0f);
+  float sum = 0.0f;
+
+  for (int i = 0; i < valid_count; ++i) {
+    const int a = valid_moves[i];
+    float p = std::max(0.0f, policy[static_cast<size_t>(a)]);
+
+    float dynamic_alpha = total_alpha * p + 1e-6f;
+
+    std::gamma_distribution<float> gamma(dynamic_alpha, 1.0f);
+    noise[i] = gamma(rng);
+    sum += noise[i];
+  }
+  if (sum <= 1e-12f) {
+    return;
+  }
+
+  for (int i = 0; i < valid_count; ++i) {
+    noise[i] /= sum;
+  }
+
+  for (int i = 0; i < valid_count; ++i) {
+    const int a = valid_moves[i];
+    policy[static_cast<size_t>(a)] = (1.0f - epsilon) * policy[static_cast<size_t>(a)] + epsilon * noise[i];
   }
 }
 
@@ -335,13 +370,23 @@ std::vector<std::vector<float>> run_mcts_batch(
     std::vector<float> root_policy = masked_normalized_policy(
         root_evals[i].first, game::kActionSize, root_valid_moves[i].data(), valid_count);
     if (is_full_search[i]) {
-      apply_dirichlet_noise(
+      if (params.use_shaped_dirichlet) {
+        apply_shaped_dirichlet_noise(
           root_policy,
           root_valid_moves[i].data(),
           valid_count,
           params.dirichlet_epsilon,
           params.dirichlet_alpha,
           rng);
+      } else {
+        apply_dirichlet_noise(
+          root_policy,
+          root_valid_moves[i].data(),
+          valid_count,
+          params.dirichlet_epsilon,
+          params.dirichlet_alpha,
+          rng);
+      }
     }
     root_policy = masked_normalized_policy(
         root_policy, game::kActionSize, root_valid_moves[i].data(), valid_count);
@@ -462,6 +507,7 @@ std::vector<std::vector<float>> run_mcts_batch(
   }
   return all_action_probs;
 }
+
 
 int sample_action(
     const std::vector<float>& probs,

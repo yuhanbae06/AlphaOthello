@@ -20,6 +20,7 @@ replay_memory_iters: 4
 use_fpu: false
 use_target_pruning: false
 use_dynamic_cpuct: false
+use_shaped_dirichlet: false
 target_pruning_threshold: 0.05
 fpu_reduction: 0.2
 C_base: 19652.0
