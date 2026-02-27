@@ -20,6 +20,7 @@ struct CliArgs {
   std::string stats_out_path;
   int games = 0;
   int searches = 64;
+  int max_game_moves = 0;
   float cpuct = 2.0f;
   float temp = 1.0f;
   float temp_early = -1.0f;
@@ -49,6 +50,7 @@ void print_usage() {
       << " --dirichlet-epsilon <E> --dirichlet-alpha <A>"
       << " [--parallel-games <N>]"
       << " [--pcr-full-search-prob <0..100>]"
+      << " [--max-game-moves <N>]"
       << " [--nn-max-batch-size <N>]"
       << " [--use-cuda] [--cuda-device-id <ID>]"
       << " [--stats-out <stats.bin>]\n";
@@ -84,6 +86,8 @@ CliArgs parse_args(int argc, char** argv) {
       args.games = std::stoi(next("--games"));
     } else if (key == "--searches") {
       args.searches = std::stoi(next("--searches"));
+    } else if (key == "--max-game-moves") {
+      args.max_game_moves = std::stoi(next("--max-game-moves"));
     } else if (key == "--cpuct") {
       args.cpuct = std::stof(next("--cpuct"));
     } else if (key == "--temp") {
@@ -142,6 +146,9 @@ CliArgs parse_args(int argc, char** argv) {
   if (args.parallel_games <= 0) {
     args.parallel_games = 1;
   }
+  if (args.max_game_moves < 0) {
+    args.max_game_moves = 0;
+  }
   args.pcr_full_search_prob = std::clamp(args.pcr_full_search_prob, 0, 100);
   if (args.temp_early < 0.0f) {
     args.temp_early = args.temp;
@@ -164,6 +171,7 @@ int main(int argc, char** argv) {
 
     SearchParams params;
     params.num_searches = cli.searches;
+    params.max_game_moves = cli.max_game_moves;
     params.cpuct = cli.cpuct;
     params.temperature = cli.temp;
     params.temperature_early = cli.temp_early;
@@ -262,4 +270,3 @@ int main(int argc, char** argv) {
     return 1;
   }
 }
-

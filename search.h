@@ -8,6 +8,7 @@
 
 struct SearchParams {
   int num_searches = 64;
+  int max_game_moves = 0;
   float cpuct = 2.0f;
   float temperature = 1.0f;
   float temperature_early = 1.0f;

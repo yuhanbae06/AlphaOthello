@@ -31,5 +31,9 @@ bool check_win(const Board& board, int action, int8_t player);
 void encode_state(const Board& board, std::vector<float>& out_encoded);
 void to_board_plane(const Board& board, std::vector<int8_t>& out_plane);
 int encoded_state_size();
+inline int final_state_size() { return kBoardSize * kBoardSize; }
+inline void serialize_final_state(const Board& board, std::vector<int8_t>& out_final) {
+  to_board_plane(board, out_final);
+}
 
 }  // namespace gomoku

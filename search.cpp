@@ -566,7 +566,7 @@ GameResult finalize_game(ActiveGame&& active_game, int winner) {
   GameResult result;
   result.rows = std::move(rows);
   result.winner = winner;
-  game::to_board_plane(active_game.board, result.final_state);
+  game::serialize_final_state(active_game.board, result.final_state);
   result.average_depth = std::move(active_game.average_depth);
   result.max_depth = std::move(active_game.max_depth);
   return result;
@@ -698,7 +698,10 @@ SelfplayResult run_selfplay_games(
           game::apply_move(game_inst.board, action, game_inst.player);
           const bool win = game::check_win(game_inst.board, action, game_inst.player);
           const bool full = game::is_full(game_inst.board);
-          if (win || full) {
+          const bool max_moves_reached =
+              (params.max_game_moves > 0) &&
+              (static_cast<int>(game_inst.hist.size()) >= params.max_game_moves);
+          if (win || full || max_moves_reached) {
             const auto game_end_time = std::chrono::steady_clock::now();
             const auto game_ns = static_cast<uint64_t>(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -814,19 +817,19 @@ void write_stats_file(
 
   const uint32_t final_states_count = static_cast<uint32_t>(stats.final_states.size());
   out.write(reinterpret_cast<const char*>(&final_states_count), sizeof(uint32_t));
-  const size_t board_area = static_cast<size_t>(game::kBoardSize * game::kBoardSize);
+  const size_t final_state_bytes = static_cast<size_t>(game::final_state_size());
   for (const auto& board : stats.final_states) {
-    if (board.size() == board_area) {
+    if (board.size() == final_state_bytes) {
       out.write(
           reinterpret_cast<const char*>(board.data()),
-          static_cast<std::streamsize>(board_area * sizeof(int8_t)));
+          static_cast<std::streamsize>(final_state_bytes * sizeof(int8_t)));
       continue;
     }
-    std::vector<int8_t> padded(board_area, 0);
-    const size_t copy_n = std::min(board_area, board.size());
+    std::vector<int8_t> padded(final_state_bytes, 0);
+    const size_t copy_n = std::min(final_state_bytes, board.size());
     std::copy(board.begin(), board.begin() + static_cast<std::ptrdiff_t>(copy_n), padded.begin());
     out.write(
         reinterpret_cast<const char*>(padded.data()),
-        static_cast<std::streamsize>(board_area * sizeof(int8_t)));
+        static_cast<std::streamsize>(final_state_bytes * sizeof(int8_t)));
   }
 }
