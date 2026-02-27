@@ -42,6 +42,7 @@ constexpr bitboard BOARD_MASK = ((((bitboard)1) << NUM_SQUARES) - 1);
 constexpr int kBoardSize = SIZE;
 constexpr int kActionSize = ACTION_SIZE;
 constexpr int kInputChannels = 6;
+constexpr int kIdentityPlayer = 0;
 
 State get_initial_state();
 State apply_action(const State& state, int action_idx);

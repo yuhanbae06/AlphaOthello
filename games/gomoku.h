@@ -10,6 +10,7 @@ namespace gomoku {
 constexpr int kBoardSize = 10;
 constexpr int kActionSize = kBoardSize * kBoardSize;
 constexpr int kInputChannels = 3;
+constexpr int kIdentityPlayer = 1;
 
 struct Bitboard100 {
   uint64_t lo = 0ULL;  // bits [0, 63]

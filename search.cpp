@@ -97,13 +97,20 @@ int select_child(int node_idx, const std::vector<Node>& tree, const SearchParams
   return best_idx;
 }
 
+inline int p_idx_change(int logical_player) {
+    if constexpr (game::kIdentityPlayer == 0) {
+        return (logical_player == 1) ? 0 : 1;
+    }
+    return logical_player;
+}
+
 bool evaluate_terminal(Node& node) {
   if (node.terminal_known) {
     return node.terminal;
   }
   node.terminal_known = true;
   if (node.action_taken >= 0 &&
-      game::check_win(node.state, node.action_taken, -1)) {
+      game::check_win(node.state, node.action_taken, p_idx_change(-1))) {
     node.terminal = true;
     node.terminal_value = -1.0f;
     return true;
@@ -300,7 +307,7 @@ void expand_batch(
     }
 
     game::Board child_state = tree[static_cast<size_t>(node_idx)].state;
-    game::apply_move(child_state, action, 1);
+    game::apply_move(child_state, action, p_idx_change(1));
     child_state = game::flipped_perspective(child_state);
 
     Node child;
@@ -735,7 +742,7 @@ SelfplayResult run_selfplay_games(
         std::uniform_int_distribution<int> pcr_dist(0, 99);
         for (size_t i = 0; i < active_games.size(); i++) {
           canonical_states[i] =
-              game::canonical_board(active_games[i].board, active_games[i].player);
+              game::canonical_board(active_games[i].board, p_idx_change(active_games[i].player));
           const bool full_search =
               (pcr_full_prob >= 100) ||
               ((pcr_full_prob > 0) && (pcr_dist(rng) < pcr_full_prob));
@@ -780,9 +787,11 @@ SelfplayResult run_selfplay_games(
                   valid_count,
                   move_temp,
                   rng);
+          
+          int current_idx = p_idx_change(game_inst.player);
 
-          game::apply_move(game_inst.board, action, game_inst.player);
-          const bool win = game::check_win(game_inst.board, action, game_inst.player);
+          game::apply_move(game_inst.board, action, current_idx);
+          const bool win = game::check_win(game_inst.board, action, current_idx);
           const bool full = game::is_full(game_inst.board);
           const bool max_moves_reached =
               (params.max_game_moves > 0) &&
