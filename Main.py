@@ -202,7 +202,7 @@ def model_train_ddp(config_name, model_path, optimizer_path, iteration):
     model.load_state_dict(torch.load(model_path, map_location=device))
     optimizer.load_state_dict(torch.load(optimizer_path, map_location=device))
 
-    trainer = AlphaZeroParallel(model, optimizer, game, args, monitor=False)
+    trainer = AlphaZeroParallel(model, optimizer, game, args, monitor=True)
     trainer.train_iteration_only(int(iteration), model_path, optimizer_path)
 
 

@@ -739,6 +739,7 @@ class AlphaZeroParallel:
             torch.save(self.raw_model.state_dict(), model_out_path)
             torch.save(self.optimizer.state_dict(), optimizer_out_path)
         self._barrier()
+        self.close_writer()
         if self.ddp_enabled and dist.is_initialized():
             dist.destroy_process_group()
 
