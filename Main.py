@@ -261,7 +261,9 @@ def model_play(version, config_name="play0", human_player=1, versus_version=None
         turn_idx += 1
         if is_terminal:
             _show_visualized_state(game, state, player, turn_idx)
-            if value == 1:
+            if str(getattr(game, "game_name", "")).lower().startswith("quoridor"):
+                print(player, "won")
+            elif value == 1:
                 print(player, "won")
             elif value == -1:
                 print(game.get_opponent(player), "won")
