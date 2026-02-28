@@ -1,4 +1,5 @@
 #include "search.h"
+#include "games/game.h"
 
 #include <algorithm>
 #include <atomic>
@@ -937,14 +938,14 @@ void write_stats_file(
 }
 
 // search.cpp 맨 아래 추가
-std::vector<float> get_ai_action_probs(OnnxInfer& infer, const quoridor9::State& canonical_state, int num_searches) {
+std::vector<float> get_ai_action_probs(OnnxInfer& infer, const game::State& canonical_state, int num_searches) {
     SearchParams params;
     params.num_searches = num_searches;
     params.cpuct = 2.0f;
     params.use_fpu = true;
 
     std::mt19937 rng(std::chrono::system_clock::now().time_since_epoch().count());
-    std::vector<quoridor9::State> roots = {canonical_state};
+    std::vector<game::State> roots = {canonical_state};
     std::vector<Node> tree; 
     std::vector<std::vector<float>> all_action_probs;
     std::vector<uint8_t> is_full_search = {1};

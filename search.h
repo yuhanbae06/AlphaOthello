@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "onnx_infer.h"
+#include "games/game.h"
 
 struct SearchParams {
   int num_searches = 64;
@@ -73,4 +74,4 @@ void write_stats_file(
     const SelfplayStats& stats);
 
 // search.h
-std::vector<float> get_ai_action_probs(OnnxInfer& infer, const quoridor9::State& canonical_state, int num_searches);
+std::vector<float> get_ai_action_probs(OnnxInfer& infer, const game::State& canonical_state, int num_searches);

@@ -9,24 +9,26 @@ execute_process(
 )
 find_package(pybind11 REQUIRED PATHS ${pybind11_DIR})
 
-if(GAME_IMPL STREQUAL "gomoku")
-  set(GAME_SOURCE ../games/gomoku.cpp)
-  add_compile_definitions(GAME_IMPL_GOMOKU)
-elseif(GAME_IMPL STREQUAL "quoridor5")
-  set(GAME_SOURCE ../games/quoridor5.cpp)
-  add_compile_definitions(GAME_IMPL_QUORIDOR5)
-elseif(GAME_IMPL STREQUAL "quoridor" OR GAME_IMPL STREQUAL "quoridor7")
-  set(GAME_SOURCE ../games/quoridor7.cpp)
-  add_compile_definitions(GAME_IMPL_QUORIDOR7)
-elseif(GAME_IMPL STREQUAL "quoridor9")
-  set(GAME_SOURCE ../games/quoridor9.cpp)
-  add_compile_definitions(GAME_IMPL_QUORIDOR9)
+if(GAME_IMPL STREQUAL "quoridor5")
+    set(GAME_SOURCE ../games/quoridor5.cpp)
+    add_compile_definitions(GAME_IMPL_QUORIDOR5)
+    set(PY_MODULE_NAME "quoridor_engine_5")
+elseif(GAME_IMPL STREQUAL "quoridor7")
+    set(GAME_SOURCE ../games/quoridor7.cpp)
+    add_compile_definitions(GAME_IMPL_QUORIDOR7)
+    set(PY_MODULE_NAME "quoridor_engine_7")
+elseif(GAME_IMPL STREQUAL "quoridor" OR GAME_IMPL STREQUAL "quoridor9")
+    set(GAME_SOURCE ../games/quoridor9.cpp)
+    add_compile_definitions(GAME_IMPL_QUORIDOR9)
+    set(PY_MODULE_NAME "quoridor_engine_9")
 else()
-  message(FATAL_ERROR "Unsupported GAME_IMPL='${GAME_IMPL}'. Use gomoku, quoridor5, quoridor7, or quoridor9.")
-endif()
+    message(FATAL_ERROR "Unsupported GAME_IMPL='${GAME_IMPL}'. Use quoridor5, quoridor7, or quoridor9.")
+endif() 
+
+add_compile_definitions(MODULE_NAME=${PY_MODULE_NAME})
 
 # 2. 파이썬 모듈 생성
-pybind11_add_module(quoridor_engine 
+pybind11_add_module(${PY_MODULE_NAME}
     ../binding.cpp 
     ${GAME_SOURCE}
     ../onnx_infer.cpp
@@ -34,7 +36,7 @@ pybind11_add_module(quoridor_engine
 )
 
 # 3. 헤더 및 라이브러리 경로 설정
-target_include_directories(quoridor_engine PRIVATE 
+target_include_directories(${PY_MODULE_NAME} PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${ONNXRUNTIME_DIR}/include
 )
@@ -47,11 +49,11 @@ find_library(
   REQUIRED
 )
 
-target_link_libraries(quoridor_engine PRIVATE 
+target_link_libraries(${PY_MODULE_NAME} PRIVATE 
     ${ONNXRUNTIME_LIB}
 )
 
 # 4. 출력 위치 설정 (.so 파일이 web_play 폴더 바로 아래 생성되도록)
-set_target_properties(quoridor_engine PROPERTIES
+set_target_properties(${PY_MODULE_NAME} PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )

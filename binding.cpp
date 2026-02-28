@@ -9,11 +9,15 @@
 
 // 루트 디렉토리에 있는 실제 헤더 파일명들
 #include "onnx_infer.h"
-#include "games/quoridor9.h"
 #include "search.h"
+#include "games/game.h"
+
+#if defined(GAME_IMPL_GOMOKU)
+#error "Only Quoridor variants are supported."
+#endif
 
 namespace py = pybind11;
-using namespace quoridor9;
+using namespace game;
 
 // ── 128비트 <-> 문자열 안전 변환 헬퍼 ──
 std::string int128_to_string(bitboard v) {
@@ -89,8 +93,13 @@ public:
   }
 };
 
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
+#define PYBIND11_MODULE_STR(name) PYBIND11_MODULE(name, m)
+
 // ── 파이썬 바인딩 모듈 ──
-PYBIND11_MODULE(quoridor_engine, m) {
+PYBIND11_MODULE_STR(MODULE_NAME) {
   m.doc() = "Quoridor Bitboard Engine with ONNX MCTS";
 
   // 1. State 구조체 바인딩 (__int128은 문자열 속성으로 매핑)
@@ -99,6 +108,7 @@ PYBIND11_MODULE(quoridor_engine, m) {
       .def_readwrite("turn", &State::turn)
       .def_readwrite("is_jumping", &State::is_jumping)
       .def_readwrite("jump_dir", &State::jump_dir)
+      .def_readwrite("jumper_idx", &State::jumper_idx)
       .def_property(
           "walls_left", [](const State& s) { return std::vector<int8_t>{s.walls_left[0], s.walls_left[1]}; },
           [](State& s, std::vector<int8_t> v) {
@@ -116,7 +126,13 @@ PYBIND11_MODULE(quoridor_engine, m) {
           [](State& s, const std::string& val) { s.walls_h = string_to_int128(val); })
       .def_property(
           "walls_v_str", [](const State& s) { return int128_to_string(s.walls_v); },
-          [](State& s, const std::string& val) { s.walls_v = string_to_int128(val); });
+          [](State& s, const std::string& val) { s.walls_v = string_to_int128(val); })
+      .def_property(
+          "h_block_str", [](const State& s) { return int128_to_string(s.h_block); },
+          [](State& s, const std::string& val) { s.h_block = string_to_int128(val); })
+      .def_property(
+          "v_block_str", [](const State& s) { return int128_to_string(s.v_block); },
+          [](State& s, const std::string& val) { s.v_block = string_to_int128(val); });
 
   // 2. 게임 핵심 로직 바인딩
   m.def("get_initial_state", &get_initial_state);

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
 const API_URL = 'http://localhost:8000/api';
-const SIZE = 9;
+
+const SIZE = Number(import.meta.env.VITE_BOARD_SIZE) || 9;
+
 const CELL = 54;
 const WALL = 10;
 const PAD = 8;
@@ -68,6 +70,7 @@ export default function App() {
         body: JSON.stringify(state),
       });
       const data = await res.json();
+      console.log("받아온 유효 수 배열 크기:", data.valid_moves.length); // 5x5면 57이 찍혀야 함, debug
       setValidMoves(data.valid_moves);
     } catch (error) {
       console.error("Valid moves 로드 실패:", error);
@@ -185,7 +188,7 @@ export default function App() {
       const wr = Math.floor(i / (SIZE - 1));
       const wc = i % (SIZE - 1);
       
-      const backendIdx = (wr + 1) * 10 + (wc + 1);
+      const backendIdx = (wr + 1) * (SIZE + 1) + (wc + 1);
 
       if (checkBit(gameState.walls_h, backendIdx)) {
         const x = cx(wc);
@@ -205,7 +208,7 @@ export default function App() {
       const wr = Math.floor(i / (SIZE - 1));
       const wc = i % (SIZE - 1);
       
-      const backendIdx = (wr + 1) * 10 + (wc + 1);
+      const backendIdx = (wr + 1) * (SIZE + 1) + (wc + 1);
 
       if (checkBit(gameState.walls_v, backendIdx)) {
         const x = cx(wc) + CELL;
@@ -220,87 +223,92 @@ export default function App() {
       }
     }
 
+
     // 🌟 보드판 직접 클릭을 위한 히트박스 & 미리보기 렌더링
     if (!gameOver && currentPlayer === 1 && (mode === 'wall_h' || mode === 'wall_v')) {
       for (let i = 0; i < wallsActionSize; i++) {
-        // 뒤집기(originalRow) 공식 삭제! 그냥 논리 인덱스를 그대로 씁니다.
         const wr = Math.floor(i / (SIZE - 1));
         const wc = i % (SIZE - 1);
 
         // --- 가로 벽 (H) ---
         if (mode === 'wall_h') {
-          const actionIdx = pieceActionSize + i; // 👈 아주 심플해진 액션 번호
-          if (validMoves[actionIdx] === 1) {
-            const x = cx(wc);
-            const y = cy(getDispRow(wr + 1)) + CELL;
-            
-            // 1. 클릭을 받는 1칸짜리 투명 히트박스 (절대 안 겹침)
+          const actionIdx = pieceActionSize + i;
+          const isValid = validMoves[actionIdx] === 1;
+
+          const x = cx(wc);
+          const y = cy(getDispRow(wr + 1)) + CELL;
+
+          // 1. 클릭을 받는 투명 히트박스 (항상 렌더링)
+          elements.push(
+            <div key={`hitbox_hw_${i}`} 
+              onClick={() => isValid && makeMove(actionIdx)}
+              onMouseEnter={() => setHoverIdx(i)}
+              onMouseLeave={() => setHoverIdx(null)}
+              style={{
+                position: 'absolute', left: x, top: y - 10, 
+                width: CELL * 2 + WALL, // 👈 2칸 너비로 확장! (치우침 해결)
+                height: WALL + 20, 
+                cursor: isValid ? 'pointer' : 'not-allowed', zIndex: 30,
+              }} 
+            />
+          );
+
+          // 2. 마우스를 올렸을 때 나타나는 미리보기 벽
+          if (hoverIdx === i) {
             elements.push(
-              <div key={`hitbox_hw_${i}`} 
-                onClick={() => makeMove(actionIdx)}
-                onMouseEnter={() => setHoverIdx(i)}
-                onMouseLeave={() => setHoverIdx(null)}
+              <div key={`preview_hw_${i}`} 
                 style={{
-                  position: 'absolute', left: x, top: y - 5, // 마우스 판정을 위해 위아래 살짝 여유
-                  width: CELL + WALL, height: WALL + 10, 
-                  cursor: 'pointer', zIndex: 30,
-                  // backgroundColor: 'rgba(255, 0, 0, 0.2)', // (디버깅용) 주석 풀면 히트박스 보임
+                  position: 'absolute', left: x, top: y, 
+                  width: CELL * 2 + WALL, // 👈 2칸 너비로 확장!
+                  height: WALL,
+                  // 🚨 디버깅: 설치 가능하면 초록색, 불가능하면 빨간색으로 표시!
+                  backgroundColor: isValid ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)',
+                  borderRadius: 3, zIndex: 20, pointerEvents: 'none',
+                  boxShadow: isValid ? '0 0 8px rgba(34, 197, 94, 0.9)' : 'none'
                 }} 
               />
             );
-
-            // 2. 마우스를 올렸을 때만 나타나는 2칸짜리 초록색 미리보기 벽
-            if (hoverIdx === i) {
-              elements.push(
-                <div key={`preview_hw_${i}`} 
-                  style={{
-                    position: 'absolute', left: x, top: y, 
-                    width: CELL * 2 + WALL, height: WALL,
-                    backgroundColor: 'rgba(34, 197, 94, 0.7)', borderRadius: 3, zIndex: 20,
-                    pointerEvents: 'none', // 🚨 핵심: 이 가짜 벽은 마우스 클릭을 가로채지 않습니다!
-                    boxShadow: '0 0 8px rgba(34, 197, 94, 0.9)'
-                  }} 
-                />
-              );
-            }
           }
         }
 
         // --- 세로 벽 (V) ---
         if (mode === 'wall_v') {
-          const actionIdx = pieceActionSize + wallsActionSize + i; // 👈 심플해진 액션 번호
-          if (validMoves[actionIdx] === 1) {
-            const x = cx(wc) + CELL;
-            const y = cy(getDispRow(wr + 1));
-            
-            // 1. 클릭을 받는 1칸짜리 투명 히트박스
+          const actionIdx = pieceActionSize + wallsActionSize + i;
+          const isValid = validMoves[actionIdx] === 1;
+
+          const x = cx(wc) + CELL;
+          const y = cy(getDispRow(wr + 1));
+
+          // 1. 클릭을 받는 투명 히트박스 (항상 렌더링)
+          elements.push(
+            <div key={`hitbox_vw_${i}`} 
+              onClick={() => isValid && makeMove(actionIdx)}
+              onMouseEnter={() => setHoverIdx(i)}
+              onMouseLeave={() => setHoverIdx(null)}
+              style={{
+                position: 'absolute', left: x - 10, top: y, 
+                width: WALL + 20, 
+                height: CELL * 2 + WALL, // 👈 2칸 높이로 확장!
+                cursor: isValid ? 'pointer' : 'not-allowed', zIndex: 30,
+              }} 
+            />
+          );
+
+          // 2. 마우스를 올렸을 때 나타나는 미리보기 벽
+          if (hoverIdx === i) {
             elements.push(
-              <div key={`hitbox_vw_${i}`} 
-                onClick={() => makeMove(actionIdx)}
-                onMouseEnter={() => setHoverIdx(i)}
-                onMouseLeave={() => setHoverIdx(null)}
+              <div key={`preview_vw_${i}`} 
                 style={{
-                  position: 'absolute', left: x - 5, top: y, 
-                  width: WALL + 10, height: CELL + WALL,
-                  cursor: 'pointer', zIndex: 30,
+                  position: 'absolute', left: x, top: y, 
+                  width: WALL, 
+                  height: CELL * 2 + WALL, // 👈 2칸 높이로 확장!
+                  // 🚨 디버깅: 설치 가능하면 초록색, 불가능하면 빨간색으로 표시!
+                  backgroundColor: isValid ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)',
+                  borderRadius: 3, zIndex: 20, pointerEvents: 'none',
+                  boxShadow: isValid ? '0 0 8px rgba(34, 197, 94, 0.9)' : 'none'
                 }} 
               />
             );
-
-            // 2. 마우스를 올렸을 때만 나타나는 2칸짜리 초록색 미리보기 벽
-            if (hoverIdx === i) {
-              elements.push(
-                <div key={`preview_vw_${i}`} 
-                  style={{
-                    position: 'absolute', left: x, top: y, 
-                    width: WALL, height: CELL * 2 + WALL,
-                    backgroundColor: 'rgba(34, 197, 94, 0.7)', borderRadius: 3, zIndex: 20,
-                    pointerEvents: 'none', // 클릭 통과
-                    boxShadow: '0 0 8px rgba(34, 197, 94, 0.9)'
-                  }} 
-                />
-              );
-            }
           }
         }
       }
@@ -363,9 +371,8 @@ export default function App() {
         {/* 게임 보드 */}
         {renderBoard()}
 
-{/* 조작 버튼 영역 */}
+        {/* 조작 버튼 영역 */}
         {!gameOver && currentPlayer === 1 && (
-          <>
             <div style={{ marginTop: '20px' }}>
               <button onClick={() => setMode('move')} style={{ marginRight: '10px', padding: '10px' }}>
                 {mode === 'move' ? '✅ ' : ''}🚶 이동 모드
@@ -376,36 +383,7 @@ export default function App() {
               <button onClick={() => setMode('wall_v')} style={{ padding: '10px' }}>
                 {mode === 'wall_v' ? '✅ ' : ''}🧱 세로 벽
               </button>
-            </div> {/* 👈 1. 이 div가 누락되어 있었습니다. */}
-
-            {/* 벽 설치 인터페이스 */}
-            {mode !== 'move' && (
-              <div style={{ marginTop: '15px', display: 'flex', flexWrap: 'wrap', width: W, gap: '5px' }}>
-                <p style={{ width: '100%', fontSize: '12px' }}>클릭하여 {mode === 'wall_h' ? '가로' : '세로'} 벽을 설치하세요 (버튼이 활성화된 곳만 가능)</p>
-                {Array.from({ length: wallsActionSize }).map((_, i) => {
-                  const wr = Math.floor(i / (SIZE - 1));
-                  const wc = i % (SIZE - 1);
-                  const originalRow = (SIZE - 2) - wr;
-                  const originalIdx = originalRow * (SIZE - 1) + wc;
-                  const actionIdx = mode === 'wall_h' 
-                    ? pieceActionSize + originalIdx 
-                    : pieceActionSize + wallsActionSize + originalIdx;
-                  const isValid = validMoves[actionIdx] === 1;
-
-                  return (
-                    <button 
-                      key={i} 
-                      disabled={!isValid}
-                      onClick={() => makeMove(actionIdx)}
-                      style={{ padding: '5px', fontSize: '10px' }}
-                    >
-                      ({wr},{wc})
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </>
+            </div>
         )}
 
         {!gameOver && currentPlayer === -1 && (
