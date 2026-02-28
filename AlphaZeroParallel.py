@@ -49,12 +49,66 @@ class AlphaZeroParallel:
         )
         self.model.to(original_device)
 
-    def _run_cpp_selfplay(self, onnx_path, memory_path, stats_path, iteration):
+    def _normalize_int_list(self, value, key):
+        if isinstance(value, (list, tuple)):
+            return [int(v) for v in value]
+        return [int(value)]
+
+    def _resolve_cpp_threads_per_worker(self, worker_count):
+        config = self.args.get("cpp_threads_per_worker", self.args.get("cpp_threads", 0))
+        if isinstance(config, (list, tuple)):
+            values = [int(v) for v in config]
+            if len(values) != worker_count:
+                raise ValueError(
+                    f"cpp_threads_per_worker length ({len(values)}) must equal "
+                    f"cpp_selfplay_workers ({worker_count})"
+                )
+            return values
+        return [int(config)] * worker_count
+
+    def _resolve_cpp_cuda_device_ids(self, use_cuda):
+        if not use_cuda:
+            return []
+        config = self.args.get("cpp_cuda_device_ids", None)
+        if config is None or config == []:
+            return [int(self.args.get("cpp_cuda_device_id", 0))]
+        ids = self._normalize_int_list(config, "cpp_cuda_device_ids")
+        # Preserve order while dropping accidental duplicates.
+        return list(dict.fromkeys(ids))
+
+    def _validate_worker_config(self, worker_count, use_cuda):
+        threads = self._resolve_cpp_threads_per_worker(worker_count)
+        gpu_ids = self._resolve_cpp_cuda_device_ids(use_cuda)
+        if use_cuda and len(gpu_ids) == 0:
+            raise ValueError("cpp_use_cuda=true requires at least one CUDA device id")
+        if use_cuda and worker_count > len(gpu_ids):
+            raise ValueError(
+                f"cpp_selfplay_workers ({worker_count}) cannot exceed "
+                f"configured CUDA devices ({len(gpu_ids)})"
+            )
+        return threads, gpu_ids
+
+    def _distribute_games_per_worker(self, total_games, worker_count):
+        if worker_count <= 0:
+            return []
+        base = total_games // worker_count
+        remainder = total_games % worker_count
+        counts = []
+        for worker_id in range(worker_count):
+            count = base + (1 if worker_id < remainder else 0)
+            counts.append(count)
+        return counts
+
+    def _worker_artifact_paths(self, iteration, worker_id):
+        artifact_dir = "./tmp_cpp_selfplay"
+        memory_path = os.path.join(artifact_dir, f"memory_{iteration}_w{worker_id}.bin")
+        stats_path = os.path.join(artifact_dir, f"stats_{iteration}_w{worker_id}.bin")
+        return memory_path, stats_path
+
+    def _build_cpp_selfplay_cmd(self, onnx_path, worker_spec):
         cpp_bin = self.args.get("cpp_selfplay_path", "./build/cpp_selfplay")
-        threads = int(self.args.get("cpp_threads", 0))
         nn_max_batch_size = int(self.args.get("cpp_nn_max_batch_size", 64))
         use_cuda = bool(self.args.get("cpp_use_cuda", torch.cuda.is_available()))
-        cuda_device_id = int(self.args.get("cpp_cuda_device_id", 0))
         temp = float(self.args.get("temperature", self.args.get("chosenMoveTemperature", 1.0)))
         temp_early = float(
             self.args.get("temperature_early", self.args.get("chosenMoveTemperatureEarly", temp))
@@ -64,8 +118,6 @@ class AlphaZeroParallel:
                 "temperature_halflife", self.args.get("chosenMoveTemperatureHalflife", 19.0)
             )
         )
-        seed_base = self.args.get("seed", 0)
-        seed = int(seed_base + iteration)
         pcr_full_search_prob = int(self.args.get("pcr_full_search_prob", 25))
         max_game_moves = int(self.args.get("max_game_moves", 0))
 
@@ -83,11 +135,11 @@ class AlphaZeroParallel:
             "--onnx",
             onnx_path,
             "--out",
-            memory_path,
+            worker_spec["memory_path"],
             "--stats-out",
-            stats_path,
+            worker_spec["stats_path"],
             "--games",
-            str(self.args["num_selfPlay_iterations"]),
+            str(worker_spec["games"]),
             "--parallel-games",
             str(self.args.get("num_parallel_games", 1)),
             "--pcr-full-search-prob",
@@ -105,11 +157,11 @@ class AlphaZeroParallel:
             "--temp-halflife",
             str(temp_halflife),
             "--threads",
-            str(threads),
+            str(worker_spec["threads"]),
             "--nn-max-batch-size",
             str(nn_max_batch_size),
             "--seed",
-            str(seed),
+            str(worker_spec["seed"]),
             "--dirichlet-epsilon",
             str(self.args["dirichlet_epsilon"]),
             "--dirichlet-alpha",
@@ -122,7 +174,7 @@ class AlphaZeroParallel:
             str(c_base),
         ]
         if use_cuda:
-            cmd.extend(["--use-cuda", "--cuda-device-id", str(cuda_device_id)])
+            cmd.extend(["--use-cuda", "--cuda-device-id", str(worker_spec["gpu_id"])])
         if not use_target_pruning:
             cmd.append("--no-target-pruning")
         if not use_fpu:
@@ -131,13 +183,121 @@ class AlphaZeroParallel:
             cmd.append("--no-dynamic-cpuct")
         if not use_shaped_dirichlet:
             cmd.append("--no-shaped-dirichlet")
-        
-        start_t = time.time()
-        subprocess.run(cmd, check=True)
-        end_t = time.time()
-        elapsed = end_t - start_t
-        print(f"[learn] cpp selfplay iteration={iteration} elapsed={elapsed:.2f}s")
-        return elapsed
+        return cmd
+
+    def _build_selfplay_worker_specs(self, iteration, onnx_path):
+        total_games = int(self.args["num_selfPlay_iterations"])
+        requested_workers = max(1, int(self.args.get("cpp_selfplay_workers", 1)))
+        use_cuda = bool(self.args.get("cpp_use_cuda", torch.cuda.is_available()))
+        threads_per_worker, gpu_ids = self._validate_worker_config(requested_workers, use_cuda)
+        games_per_worker = self._distribute_games_per_worker(total_games, requested_workers)
+        seed_base = int(self.args.get("seed", 0))
+
+        specs = []
+        for worker_id, games in enumerate(games_per_worker):
+            if games <= 0:
+                continue
+            memory_path, stats_path = self._worker_artifact_paths(iteration, worker_id)
+            gpu_id = gpu_ids[worker_id] if use_cuda else None
+            spec = {
+                "worker_id": worker_id,
+                "games": int(games),
+                "threads": int(threads_per_worker[worker_id]),
+                "gpu_id": gpu_id,
+                "memory_path": memory_path,
+                "stats_path": stats_path,
+                "seed": int(seed_base + iteration * 1000003 + worker_id * 9176),
+            }
+            spec["cmd"] = self._build_cpp_selfplay_cmd(onnx_path, spec)
+            specs.append(spec)
+        return {
+            "specs": specs,
+            "use_cuda": use_cuda,
+            "gpu_ids": gpu_ids,
+        }
+
+    def _terminate_running_workers(self, running):
+        for entry in running:
+            proc = entry["proc"]
+            if proc.poll() is None:
+                proc.terminate()
+        deadline = time.time() + 5.0
+        for entry in running:
+            proc = entry["proc"]
+            while proc.poll() is None and time.time() < deadline:
+                time.sleep(0.05)
+            if proc.poll() is None:
+                proc.kill()
+
+    def _run_cpp_selfplay_multi(self, onnx_path, iteration):
+        config = self._build_selfplay_worker_specs(iteration, onnx_path)
+        specs = list(config["specs"])
+        if len(specs) == 0:
+            raise RuntimeError("No selfplay workers were scheduled")
+
+        use_cuda = config["use_cuda"]
+        total_start = time.time()
+        running = []
+        completed = []
+        for spec in specs:
+            proc = subprocess.Popen(spec["cmd"])
+            running.append({"proc": proc, "spec": spec, "start_time": time.time()})
+
+        while running:
+            finished_index = None
+            while finished_index is None:
+                for idx, entry in enumerate(running):
+                    if entry["proc"].poll() is not None:
+                        finished_index = idx
+                        break
+                if finished_index is None:
+                    time.sleep(0.1)
+
+            entry = running.pop(finished_index)
+            spec = entry["spec"]
+            return_code = entry["proc"].returncode
+            elapsed = time.time() - entry["start_time"]
+
+            if return_code != 0:
+                self._terminate_running_workers(running)
+                raise RuntimeError(
+                    "cpp selfplay worker failed: "
+                    f"iteration={iteration} worker={spec['worker_id']} gpu={spec['gpu_id']} "
+                    f"returncode={return_code} out={spec['memory_path']} stats={spec['stats_path']} "
+                    f"cmd={' '.join(spec['cmd'])}"
+                )
+
+            completed.append(
+                {
+                    **spec,
+                    "elapsed": elapsed,
+                    "returncode": return_code,
+                }
+            )
+
+            if not launched and pending and not use_cuda:
+                continue
+
+        completed.sort(key=lambda item: item["worker_id"])
+        total_elapsed = time.time() - total_start
+        if use_cuda:
+            assignment_summary = ",".join(
+                f"w{item['worker_id']}->gpu{item['gpu_id']}"
+                for item in completed
+            )
+        else:
+            assignment_summary = ",".join(
+                f"w{item['worker_id']}->cpu" for item in completed
+            )
+        elapsed_summary = ",".join(
+            f"w{item['worker_id']}:{item['elapsed']:.1f}s" for item in completed
+        )
+        return {
+            "elapsed": total_elapsed,
+            "worker_results": completed,
+            "assignment_summary": assignment_summary,
+            "elapsed_summary": elapsed_summary,
+        }
 
     def _append_timing_profile(self, row):
         os.makedirs(self.log_dir, exist_ok=True)
@@ -195,6 +355,49 @@ class AlphaZeroParallel:
                 memory.append((encoded_state, policy, value))
         return memory
 
+    def _artifact_paths_for_iteration(self, prefix, iteration):
+        artifact_dir = "./tmp_cpp_selfplay"
+        legacy_path = os.path.join(artifact_dir, f"{prefix}_{iteration}.bin")
+        if os.path.exists(legacy_path):
+            return [legacy_path]
+
+        if not os.path.isdir(artifact_dir):
+            return []
+
+        pattern = re.compile(rf"^{prefix}_{iteration}_w(\d+)\.bin$")
+        matches = []
+        for name in os.listdir(artifact_dir):
+            match = pattern.match(name)
+            if match is None:
+                continue
+            matches.append((int(match.group(1)), os.path.join(artifact_dir, name)))
+        matches.sort(key=lambda item: item[0])
+        return [path for _, path in matches]
+
+    def _load_memory_bins(self, memory_paths):
+        merged_memory = []
+        counts = []
+        for path in memory_paths:
+            chunk = self._load_memory_bin(path)
+            merged_memory.extend(chunk)
+            counts.append((path, len(chunk)))
+        return merged_memory, counts
+
+    def _merge_stats_dicts(self, stats_dicts):
+        merged = dict(win=0, draw=0, lose=0, average_depth=[], max_depth=[], final_states=[])
+        for stats in stats_dicts:
+            merged["win"] += int(stats.get("win", 0))
+            merged["draw"] += int(stats.get("draw", 0))
+            merged["lose"] += int(stats.get("lose", 0))
+            merged["average_depth"].extend(stats.get("average_depth", []))
+            merged["max_depth"].extend(stats.get("max_depth", []))
+            merged["final_states"].extend(stats.get("final_states", []))
+        return merged
+
+    def _load_stats_bins(self, stats_paths):
+        stats_dicts = [self._load_stats_bin(path) for path in stats_paths]
+        return self._merge_stats_dicts(stats_dicts)
+
     def _load_replay_memory(self, iteration, current_memory=None):
         replay_memory_iters = max(0, int(self.args.get("replay_memory_iters", 0)))
         start_iter = max(0, iteration - replay_memory_iters)
@@ -206,12 +409,12 @@ class AlphaZeroParallel:
                 merged_memory.extend(current_memory)
                 loaded.append((i, len(current_memory)))
                 continue
-            path = f"./tmp_cpp_selfplay/memory_{i}.bin"
-            if not os.path.exists(path):
+            paths = self._artifact_paths_for_iteration("memory", i)
+            if len(paths) == 0:
                 if i == iteration:
-                    raise RuntimeError(f"Missing current memory file: {path}")
+                    raise RuntimeError(f"Missing current memory files for iteration {i}")
                 continue
-            chunk = self._load_memory_bin(path)
+            chunk, _ = self._load_memory_bins(paths)
             merged_memory.extend(chunk)
             loaded.append((i, len(chunk)))
 
@@ -226,7 +429,7 @@ class AlphaZeroParallel:
         if not os.path.isdir(mem_dir):
             return removed
 
-        pattern = re.compile(r"^memory_(\d+)\.bin$")
+        pattern = re.compile(r"^memory_(\d+)(?:_w\d+)?\.bin$")
         for name in os.listdir(mem_dir):
             match = pattern.match(name)
             if match is None:
@@ -251,7 +454,7 @@ class AlphaZeroParallel:
         if not os.path.isdir(artifact_dir):
             return removed_stats, removed_onnx
 
-        stats_pattern = re.compile(r"^stats_(\d+)\.bin$")
+        stats_pattern = re.compile(r"^stats_(\d+)(?:_w\d+)?\.bin$")
         onnx_pattern = re.compile(r"^model_(\d+)\.onnx$")
 
         for name in os.listdir(artifact_dir):
@@ -390,19 +593,20 @@ class AlphaZeroParallel:
         for iteration in range(start_iteration, total_iterations):
             iteration_start = time.perf_counter()
             onnx_path = f"./tmp_cpp_selfplay/model_{iteration}.onnx"
-            memory_path = f"./tmp_cpp_selfplay/memory_{iteration}.bin"
-            stats_path = f"./tmp_cpp_selfplay/stats_{iteration}.bin"
 
             t0 = time.perf_counter()
             self._export_onnx(onnx_path)
             onnx_export_sec = time.perf_counter() - t0
 
             t0 = time.perf_counter()
-            elapsed = self._run_cpp_selfplay(onnx_path, memory_path, stats_path, iteration)
+            selfplay_result = self._run_cpp_selfplay_multi(onnx_path, iteration)
+            elapsed = selfplay_result["elapsed"]
             selfplay_sec = time.perf_counter() - t0
 
             t0 = time.perf_counter()
-            current_memory = self._load_memory_bin(memory_path)
+            current_memory, current_memory_chunks = self._load_memory_bins(
+                [item["memory_path"] for item in selfplay_result["worker_results"]]
+            )
             memory, loaded_replay = self._load_replay_memory(iteration, current_memory=current_memory)
             memory_load_sec = time.perf_counter() - t0
             if len(current_memory) == 0:
@@ -412,7 +616,9 @@ class AlphaZeroParallel:
             removed_stale = self._cleanup_stale_memory_bins(iteration)
 
             t0 = time.perf_counter()
-            stats = self._load_stats_bin(stats_path)
+            stats = self._load_stats_bins(
+                [item["stats_path"] for item in selfplay_result["worker_results"]]
+            )
             stats_load_sec = time.perf_counter() - t0
             self.add_history(stats)
             removed_stale_stats = []
@@ -488,6 +694,19 @@ class AlphaZeroParallel:
                 f"train_rows={len(memory)} "
                 f"rows_per_sec={rows_per_sec:.1f}"
             )
+            print(
+                f"[profile][iter {iteration}] "
+                f"selfplay_gpu_assignments={selfplay_result['assignment_summary']}"
+            )
+            print(
+                f"[profile][iter {iteration}] "
+                f"selfplay_worker_sec={selfplay_result['elapsed_summary']}"
+            )
+            if current_memory_chunks:
+                chunk_desc = ",".join(
+                    f"{os.path.basename(path)}:{count}" for path, count in current_memory_chunks
+                )
+                print(f"[profile][iter {iteration}] selfplay_memory_chunks={chunk_desc}")
             if loaded_replay:
                 replay_desc = ",".join(f"{idx}:{cnt}" for idx, cnt in loaded_replay)
                 print(f"[profile][iter {iteration}] replay_memory_iters={self.args.get('replay_memory_iters', 0)} loaded={replay_desc}")
@@ -590,3 +809,4 @@ class AlphaZeroParallel:
     def close_writer(self):
         if self.writer is not None:
             self.writer.close()
+
