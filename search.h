@@ -71,3 +71,6 @@ void write_memory_file(
 void write_stats_file(
     const std::string& path,
     const SelfplayStats& stats);
+
+// search.h
+std::vector<float> get_ai_action_probs(OnnxInfer& infer, const quoridor9::State& canonical_state, int num_searches);
