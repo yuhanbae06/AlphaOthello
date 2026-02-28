@@ -9,7 +9,9 @@ import time
 
 import numpy as np
 import torch
+import torch.distributed as dist
 import torch.nn.functional as F
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import trange
 
@@ -17,25 +19,70 @@ from tqdm import trange
 class AlphaZeroParallel:
     def __init__(self, model, optimizer, game, args, monitor=False, log_dir="logs"):
         self.model = model
+        self.raw_model = model
         self.optimizer = optimizer
         self.game = game
         self.args = args
         self.monitor = monitor
         self.log_dir = args.get("log_dir", log_dir)
-        self.writer = SummaryWriter(log_dir=self.log_dir) if self.monitor else None
+        self.rank = 0
+        self.local_rank = 0
+        self.world_size = 1
+        self.ddp_enabled = False
+        self.device = getattr(model, "device", torch.device("cpu"))
         self.history = dict(win=0, draw=0, lose=0, average_depth=[], max_depth=[])
         self.timing_profile_path = os.path.join(self.log_dir, "timing_profile.csv")
+        self._init_distributed_if_needed()
+        self.monitor = bool(monitor and self.is_rank0)
+        self.writer = SummaryWriter(log_dir=self.log_dir) if self.monitor else None
+
+    @property
+    def is_rank0(self):
+        return self.rank == 0
+
+    def _init_distributed_if_needed(self):
+        world_size = int(os.environ.get("WORLD_SIZE", "1"))
+        if world_size <= 1:
+            self.raw_model.device = self.device
+            return
+        if not torch.cuda.is_available():
+            raise RuntimeError("DDP training requires CUDA")
+        if not dist.is_available():
+            raise RuntimeError("torch.distributed is unavailable in this environment")
+        if not dist.is_initialized():
+            dist.init_process_group(backend="nccl")
+        self.ddp_enabled = True
+        self.rank = dist.get_rank()
+        self.world_size = dist.get_world_size()
+        self.local_rank = int(os.environ.get("LOCAL_RANK", self.rank))
+        self.device = torch.device(f"cuda:{self.local_rank}")
+        torch.cuda.set_device(self.local_rank)
+        self.raw_model.to(self.device)
+        self.raw_model.device = self.device
+        self._move_optimizer_state(self.device)
+        self.model = DDP(self.raw_model, device_ids=[self.local_rank], output_device=self.local_rank)
+
+    def _move_optimizer_state(self, device):
+        for state in self.optimizer.state.values():
+            for key, value in list(state.items()):
+                if torch.is_tensor(value):
+                    state[key] = value.to(device)
+
+    def _barrier(self):
+        if self.ddp_enabled:
+            dist.barrier()
 
     def _export_onnx(self, onnx_path):
-        self.model.eval()
-        original_device = self.model.device
-        self.model.to("cpu")
+        self.raw_model.eval()
+        original_device = self.device
+        self.raw_model.to("cpu")
+        self.raw_model.device = torch.device("cpu")
         dummy = torch.zeros(
             (1, self.game.input_channels, self.game.row_count, self.game.column_count),
             dtype=torch.float32,
         )
         torch.onnx.export(
-            self.model,
+            self.raw_model,
             dummy,
             onnx_path,
             input_names=["input"],
@@ -49,7 +96,8 @@ class AlphaZeroParallel:
             },
             dynamo=False,
         )
-        self.model.to(original_device)
+        self.raw_model.to(original_device)
+        self.raw_model.device = original_device
 
     def _normalize_int_list(self, value, key):
         if isinstance(value, (list, tuple)):
@@ -579,11 +627,16 @@ class AlphaZeroParallel:
         )
 
     def train(self, memory, num_iteration, num_epoch):
-        random.shuffle(memory)
-        num_batches = max(1, len(memory) // self.args["batch_size"])
+        indices = list(range(len(memory)))
+        shuffle_seed = int(self.args.get("seed", 0)) + num_iteration * 1000003 + num_epoch * 9176
+        random.Random(shuffle_seed).shuffle(indices)
+        if self.ddp_enabled:
+            indices = indices[self.rank :: self.world_size]
+        num_batches = max(1, len(indices) // self.args["batch_size"])
 
-        for batch_idx in range(0, len(memory), self.args["batch_size"]):
-            sample = memory[batch_idx : min(len(memory), batch_idx + self.args["batch_size"])]
+        for batch_idx in range(0, len(indices), self.args["batch_size"]):
+            batch_indices = indices[batch_idx : min(len(indices), batch_idx + self.args["batch_size"])]
+            sample = [memory[i] for i in batch_indices]
             if len(sample) == 0:
                 continue
 
@@ -592,9 +645,9 @@ class AlphaZeroParallel:
             policy_targets = np.array(policy_targets, dtype=np.float32)
             value_targets = np.array(value_targets, dtype=np.float32).reshape(-1, 1)
 
-            state = torch.tensor(state, dtype=torch.float32, device=self.model.device)
-            policy_targets = torch.tensor(policy_targets, dtype=torch.float32, device=self.model.device)
-            value_targets = torch.tensor(value_targets, dtype=torch.float32, device=self.model.device)
+            state = torch.tensor(state, dtype=torch.float32, device=self.device)
+            policy_targets = torch.tensor(policy_targets, dtype=torch.float32, device=self.device)
+            value_targets = torch.tensor(value_targets, dtype=torch.float32, device=self.device)
 
             out_policy, out_value = self.model(state)
             policy_loss = F.cross_entropy(out_policy, policy_targets)
@@ -616,9 +669,11 @@ class AlphaZeroParallel:
             self.optimizer.step()
 
     def learn(self):
-        os.makedirs("./tmp_cpp_selfplay", exist_ok=True)
-        os.makedirs("./saved_model", exist_ok=True)
-        os.makedirs(self.log_dir, exist_ok=True)
+        if self.is_rank0:
+            os.makedirs("./tmp_cpp_selfplay", exist_ok=True)
+            os.makedirs("./saved_model", exist_ok=True)
+            os.makedirs(self.log_dir, exist_ok=True)
+        self._barrier()
 
         total_iterations = int(self.args["num_iterations"])
         start_iteration = max(0, int(self.args.get("start_iteration", 0)))
@@ -632,18 +687,26 @@ class AlphaZeroParallel:
             iteration_start = time.perf_counter()
             onnx_path = f"./tmp_cpp_selfplay/model_{iteration}.onnx"
 
-            t0 = time.perf_counter()
-            self._export_onnx(onnx_path)
-            onnx_export_sec = time.perf_counter() - t0
+            onnx_export_sec = 0.0
+            selfplay_sec = 0.0
+            elapsed = 0.0
+            selfplay_result = None
 
-            t0 = time.perf_counter()
-            selfplay_result = self._run_cpp_selfplay_multi(onnx_path, iteration)
-            elapsed = selfplay_result["elapsed"]
-            selfplay_sec = time.perf_counter() - t0
+            if self.is_rank0:
+                t0 = time.perf_counter()
+                self._export_onnx(onnx_path)
+                onnx_export_sec = time.perf_counter() - t0
+
+                t0 = time.perf_counter()
+                selfplay_result = self._run_cpp_selfplay_multi(onnx_path, iteration)
+                elapsed = selfplay_result["elapsed"]
+                selfplay_sec = time.perf_counter() - t0
+
+            self._barrier()
 
             t0 = time.perf_counter()
             current_memory, current_memory_chunks = self._load_memory_bins(
-                [item["memory_path"] for item in selfplay_result["worker_results"]]
+                self._artifact_paths_for_iteration("memory", iteration)
             )
             memory, loaded_replay = self._load_replay_memory(iteration, current_memory=current_memory)
             memory_load_sec = time.perf_counter() - t0
@@ -651,19 +714,20 @@ class AlphaZeroParallel:
                 raise RuntimeError("C++ selfplay returned empty memory")
             if len(memory) == 0:
                 raise RuntimeError("Replay memory is empty")
-            removed_stale = self._cleanup_stale_memory_bins(iteration)
+            removed_stale = self._cleanup_stale_memory_bins(iteration) if self.is_rank0 else []
 
-            t0 = time.perf_counter()
-            stats = self._load_stats_bins(
-                [item["stats_path"] for item in selfplay_result["worker_results"]]
-            )
-            stats_load_sec = time.perf_counter() - t0
-            self.add_history(stats)
+            stats_load_sec = 0.0
+            stats = None
+            if self.is_rank0:
+                t0 = time.perf_counter()
+                stats = self._load_stats_bins(self._artifact_paths_for_iteration("stats", iteration))
+                stats_load_sec = time.perf_counter() - t0
+                self.add_history(stats)
             removed_stale_stats = []
             removed_stale_onnx = []
 
             monitor_log_sec = 0.0
-            if self.monitor:
+            if self.monitor and stats is not None:
                 t0 = time.perf_counter()
                 self.log_scalar("selfplay/time_sec", elapsed, iteration)
                 self.log_scalar("selfplay/memory_rows", len(current_memory), iteration)
@@ -696,20 +760,27 @@ class AlphaZeroParallel:
                         f"final_state/{iteration}", self.game.get_visualized_state(board), i
                     )
                 monitor_log_sec = time.perf_counter() - t0
-            removed_stale_stats, removed_stale_onnx = self._cleanup_stale_runtime_artifacts(iteration)
+            if self.is_rank0:
+                removed_stale_stats, removed_stale_onnx = self._cleanup_stale_runtime_artifacts(iteration)
+            self._barrier()
 
             self.model.train()
             epoch_times = []
             train_start = time.perf_counter()
-            for epoch in trange(self.args["num_epochs"], desc=f"train iter {iteration}"):
+            epoch_iter = range(self.args["num_epochs"])
+            if self.is_rank0:
+                epoch_iter = trange(self.args["num_epochs"], desc=f"train iter {iteration}")
+            for epoch in epoch_iter:
                 epoch_start = time.perf_counter()
                 self.train(memory, iteration, epoch)
                 epoch_times.append(time.perf_counter() - epoch_start)
             train_total_sec = time.perf_counter() - train_start
+            self._barrier()
 
             save_start = time.perf_counter()
-            torch.save(self.model.state_dict(), f"./saved_model/model_{iteration}_{self.game}.pt")
-            torch.save(self.optimizer.state_dict(), f"./saved_model/optimizer_{iteration}_{self.game}.pt")
+            if self.is_rank0:
+                torch.save(self.raw_model.state_dict(), f"./saved_model/model_{iteration}_{self.game}.pt")
+                torch.save(self.optimizer.state_dict(), f"./saved_model/optimizer_{iteration}_{self.game}.pt")
             save_sec = time.perf_counter() - save_start
 
             iteration_total_sec = time.perf_counter() - iteration_start
@@ -718,47 +789,52 @@ class AlphaZeroParallel:
             train_epoch_max_sec = float(np.max(epoch_times)) if epoch_times else 0.0
             rows_per_sec = (len(current_memory) / selfplay_sec) if selfplay_sec > 1e-9 else 0.0
 
-            print(
-                f"[profile][iter {iteration}] "
-                f"onnx_export={onnx_export_sec:.3f}s "
-                f"selfplay={selfplay_sec:.3f}s "
-                f"load_memory={memory_load_sec:.3f}s "
-                f"load_stats={stats_load_sec:.3f}s "
-                f"monitor_log={monitor_log_sec:.3f}s "
-                f"train={train_total_sec:.3f}s "
-                f"save={save_sec:.3f}s "
-                f"total={iteration_total_sec:.3f}s "
-                f"rows={len(current_memory)} "
-                f"train_rows={len(memory)} "
-                f"rows_per_sec={rows_per_sec:.1f}"
-            )
-            print(
-                f"[profile][iter {iteration}] "
-                f"selfplay_gpu_assignments={selfplay_result['assignment_summary']}"
-            )
-            print(
-                f"[profile][iter {iteration}] "
-                f"selfplay_worker_sec={selfplay_result['elapsed_summary']}"
-            )
-            if current_memory_chunks:
-                chunk_desc = ",".join(
-                    f"{os.path.basename(path)}:{count}" for path, count in current_memory_chunks
+            if self.is_rank0:
+                print(
+                    f"[profile][iter {iteration}] "
+                    f"onnx_export={onnx_export_sec:.3f}s "
+                    f"selfplay={selfplay_sec:.3f}s "
+                    f"load_memory={memory_load_sec:.3f}s "
+                    f"load_stats={stats_load_sec:.3f}s "
+                    f"monitor_log={monitor_log_sec:.3f}s "
+                    f"train={train_total_sec:.3f}s "
+                    f"save={save_sec:.3f}s "
+                    f"total={iteration_total_sec:.3f}s "
+                    f"rows={len(current_memory)} "
+                    f"train_rows={len(memory)} "
+                    f"rows_per_sec={rows_per_sec:.1f}"
                 )
-                print(f"[profile][iter {iteration}] selfplay_memory_chunks={chunk_desc}")
-            if loaded_replay:
-                replay_desc = ",".join(f"{idx}:{cnt}" for idx, cnt in loaded_replay)
-                print(f"[profile][iter {iteration}] replay_memory_iters={self.args.get('replay_memory_iters', 0)} loaded={replay_desc}")
-            if removed_stale:
-                print(f"[profile][iter {iteration}] removed_stale_memory_bins={removed_stale}")
-            if removed_stale_stats:
-                print(f"[profile][iter {iteration}] removed_stale_stats_bins={removed_stale_stats}")
-            if removed_stale_onnx:
-                print(f"[profile][iter {iteration}] removed_stale_onnx_models={removed_stale_onnx}")
-            print(
-                f"[profile][iter {iteration}] "
-                f"train_epoch_sec min/avg/max="
-                f"{train_epoch_min_sec:.3f}/{train_epoch_avg_sec:.3f}/{train_epoch_max_sec:.3f}"
-            )
+                print(
+                    f"[profile][iter {iteration}] "
+                    f"selfplay_gpu_assignments={selfplay_result['assignment_summary']}"
+                )
+                print(
+                    f"[profile][iter {iteration}] "
+                    f"selfplay_worker_sec={selfplay_result['elapsed_summary']}"
+                )
+            if self.is_rank0:
+                if current_memory_chunks:
+                    chunk_desc = ",".join(
+                        f"{os.path.basename(path)}:{count}" for path, count in current_memory_chunks
+                    )
+                    print(f"[profile][iter {iteration}] selfplay_memory_chunks={chunk_desc}")
+                if loaded_replay:
+                    replay_desc = ",".join(f"{idx}:{cnt}" for idx, cnt in loaded_replay)
+                    print(
+                        f"[profile][iter {iteration}] replay_memory_iters="
+                        f"{self.args.get('replay_memory_iters', 0)} loaded={replay_desc}"
+                    )
+                if removed_stale:
+                    print(f"[profile][iter {iteration}] removed_stale_memory_bins={removed_stale}")
+                if removed_stale_stats:
+                    print(f"[profile][iter {iteration}] removed_stale_stats_bins={removed_stale_stats}")
+                if removed_stale_onnx:
+                    print(f"[profile][iter {iteration}] removed_stale_onnx_models={removed_stale_onnx}")
+                print(
+                    f"[profile][iter {iteration}] "
+                    f"train_epoch_sec min/avg/max="
+                    f"{train_epoch_min_sec:.3f}/{train_epoch_avg_sec:.3f}/{train_epoch_max_sec:.3f}"
+                )
 
             timing_row = dict(
                 iteration=iteration,
@@ -777,7 +853,8 @@ class AlphaZeroParallel:
                 train_rows=len(memory),
                 selfplay_rows_per_sec=f"{rows_per_sec:.3f}",
             )
-            self._append_timing_profile(timing_row)
+            if self.is_rank0:
+                self._append_timing_profile(timing_row)
 
             if self.monitor:
                 self.log_scalar("timing/onnx_export_sec", onnx_export_sec, iteration)
@@ -793,7 +870,8 @@ class AlphaZeroParallel:
                 self.log_scalar("timing/iteration_total_sec", iteration_total_sec, iteration)
                 self.log_scalar("timing/selfplay_rows_per_sec", rows_per_sec, iteration)
 
-            self.reset_history()
+            if self.is_rank0:
+                self.reset_history()
 
         self.close_writer()
 
