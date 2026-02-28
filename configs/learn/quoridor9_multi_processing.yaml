@@ -3,7 +3,7 @@ C: 2.0
 num_searches: 200
 max_game_moves: 144
 num_iterations: 1
-num_selfPlay_iterations: 768
+num_selfPlay_iterations: 4096
 num_parallel_games: 64
 pcr_full_search_prob: 100
 num_epochs: 4
@@ -21,7 +21,7 @@ cpp_cuda_device_id: 0
 
 cpp_selfplay_workers: 4
 cpp_cuda_device_ids: [0, 1, 2, 3]
-cpp_threads_per_worker: 24
+cpp_threads_per_worker: 16
 
 replay_memory_iters: 4
 use_fpu: false

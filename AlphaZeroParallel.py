@@ -3,6 +3,8 @@ import random
 import re
 import struct
 import subprocess
+import sys
+import threading
 import time
 
 import numpy as np
@@ -228,6 +230,43 @@ class AlphaZeroParallel:
                 time.sleep(0.05)
             if proc.poll() is None:
                 proc.kill()
+        for entry in running:
+            stderr_thread = entry.get("stderr_thread")
+            if stderr_thread is not None:
+                stderr_thread.join(timeout=1.0)
+
+    def _is_ignorable_cpp_selfplay_stderr(self, line):
+        return (
+            "pthread_setaffinity_np failed" in line
+            or "Specify the number of threads explicitly so the affinity is not set." in line
+        )
+
+    def _launch_cpp_selfplay_worker(self, spec):
+        proc = subprocess.Popen(
+            spec["cmd"],
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+        stderr_lines = []
+
+        def _drain_stderr():
+            assert proc.stderr is not None
+            for line in proc.stderr:
+                if self._is_ignorable_cpp_selfplay_stderr(line):
+                    continue
+                stderr_lines.append(line)
+                print(line, end="", file=sys.stderr)
+
+        stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+        stderr_thread.start()
+        return {
+            "proc": proc,
+            "spec": spec,
+            "start_time": time.time(),
+            "stderr_lines": stderr_lines,
+            "stderr_thread": stderr_thread,
+        }
 
     def _run_cpp_selfplay_multi(self, onnx_path, iteration):
         config = self._build_selfplay_worker_specs(iteration, onnx_path)
@@ -240,8 +279,7 @@ class AlphaZeroParallel:
         running = []
         completed = []
         for spec in specs:
-            proc = subprocess.Popen(spec["cmd"])
-            running.append({"proc": proc, "spec": spec, "start_time": time.time()})
+            running.append(self._launch_cpp_selfplay_worker(spec))
 
         while running:
             finished_index = None
@@ -257,14 +295,17 @@ class AlphaZeroParallel:
             spec = entry["spec"]
             return_code = entry["proc"].returncode
             elapsed = time.time() - entry["start_time"]
+            entry["stderr_thread"].join(timeout=1.0)
 
             if return_code != 0:
                 self._terminate_running_workers(running)
+                stderr_text = "".join(entry["stderr_lines"]).strip()
+                stderr_suffix = f" stderr={stderr_text}" if stderr_text else ""
                 raise RuntimeError(
                     "cpp selfplay worker failed: "
                     f"iteration={iteration} worker={spec['worker_id']} gpu={spec['gpu_id']} "
                     f"returncode={return_code} out={spec['memory_path']} stats={spec['stats_path']} "
-                    f"cmd={' '.join(spec['cmd'])}"
+                    f"cmd={' '.join(spec['cmd'])}{stderr_suffix}"
                 )
 
             completed.append(
@@ -274,9 +315,6 @@ class AlphaZeroParallel:
                     "returncode": return_code,
                 }
             )
-
-            if not launched and pending and not use_cuda:
-                continue
 
         completed.sort(key=lambda item: item["worker_id"])
         total_elapsed = time.time() - total_start
