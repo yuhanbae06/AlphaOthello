@@ -30,9 +30,13 @@ class AlphaZeroParallel:
         self.world_size = 1
         self.ddp_enabled = False
         self.device = getattr(model, "device", torch.device("cpu"))
+        self.ddp_train_only = bool(self.args.get("ddp_train_only", False))
         self.history = dict(win=0, draw=0, lose=0, average_depth=[], max_depth=[])
         self.timing_profile_path = os.path.join(self.log_dir, "timing_profile.csv")
-        self._init_distributed_if_needed()
+        if self.ddp_train_only:
+            self._init_distributed_if_needed()
+        else:
+            self.raw_model.device = self.device
         self.monitor = bool(monitor and self.is_rank0)
         self.writer = SummaryWriter(log_dir=self.log_dir) if self.monitor else None
 
@@ -70,7 +74,56 @@ class AlphaZeroParallel:
 
     def _barrier(self):
         if self.ddp_enabled:
-            dist.barrier()
+            dist.barrier(device_ids=[self.local_rank])
+
+    def _resolve_train_ddp_cuda_device_ids(self):
+        config = self.args.get("train_ddp_cuda_device_ids", self.args.get("cpp_cuda_device_ids", None))
+        if config is None or config == []:
+            world_size = max(1, int(self.args.get("train_ddp_world_size", 1)))
+            return [str(i) for i in range(world_size)]
+        if isinstance(config, (list, tuple)):
+            return [str(v) for v in config]
+        return [str(config)]
+
+    def _train_ddp_world_size(self):
+        configured = int(self.args.get("train_ddp_world_size", 1))
+        if configured > 1:
+            return configured
+        return len(self._resolve_train_ddp_cuda_device_ids())
+
+    def _run_ddp_train_subprocess(self, iteration, model_path, optimizer_path):
+        world_size = self._train_ddp_world_size()
+        if world_size <= 1:
+            return 0.0
+
+        config_name = self.args.get("config_name")
+        if not config_name:
+            raise RuntimeError("config_name is required for DDP train subprocess")
+
+        main_py = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Main.py")
+        visible_devices = self._resolve_train_ddp_cuda_device_ids()
+        env = os.environ.copy()
+        env["CUDA_VISIBLE_DEVICES"] = ",".join(visible_devices)
+
+        cmd = [
+            "torchrun",
+            "--standalone",
+            f"--nproc_per_node={len(visible_devices)}",
+            main_py,
+            "train-ddp",
+            "--config",
+            str(config_name),
+            "--iteration",
+            str(iteration),
+            "--model-path",
+            model_path,
+            "--optimizer-path",
+            optimizer_path,
+        ]
+
+        start_t = time.perf_counter()
+        subprocess.run(cmd, check=True, env=env)
+        return time.perf_counter() - start_t
 
     def _export_onnx(self, onnx_path):
         self.raw_model.eval()
@@ -668,12 +721,34 @@ class AlphaZeroParallel:
             loss.backward()
             self.optimizer.step()
 
+    def train_iteration_only(self, iteration, model_out_path, optimizer_out_path):
+        current_memory, _ = self._load_memory_bins(self._artifact_paths_for_iteration("memory", iteration))
+        memory, _ = self._load_replay_memory(iteration, current_memory=current_memory)
+        if len(memory) == 0:
+            raise RuntimeError("Replay memory is empty")
+
+        self.model.train()
+        epoch_iter = range(self.args["num_epochs"])
+        if self.is_rank0:
+            epoch_iter = trange(self.args["num_epochs"], desc=f"train iter {iteration}")
+        for epoch in epoch_iter:
+            self.train(memory, iteration, epoch)
+        self._barrier()
+
+        if self.is_rank0:
+            torch.save(self.raw_model.state_dict(), model_out_path)
+            torch.save(self.optimizer.state_dict(), optimizer_out_path)
+        self._barrier()
+        if self.ddp_enabled and dist.is_initialized():
+            dist.destroy_process_group()
+
     def learn(self):
+        if self.ddp_train_only:
+            raise RuntimeError("Use train_iteration_only() in ddp_train_only mode")
         if self.is_rank0:
             os.makedirs("./tmp_cpp_selfplay", exist_ok=True)
             os.makedirs("./saved_model", exist_ok=True)
             os.makedirs(self.log_dir, exist_ok=True)
-        self._barrier()
 
         total_iterations = int(self.args["num_iterations"])
         start_iteration = max(0, int(self.args.get("start_iteration", 0)))
@@ -701,8 +776,6 @@ class AlphaZeroParallel:
                 selfplay_result = self._run_cpp_selfplay_multi(onnx_path, iteration)
                 elapsed = selfplay_result["elapsed"]
                 selfplay_sec = time.perf_counter() - t0
-
-            self._barrier()
 
             t0 = time.perf_counter()
             current_memory, current_memory_chunks = self._load_memory_bins(
@@ -762,20 +835,31 @@ class AlphaZeroParallel:
                 monitor_log_sec = time.perf_counter() - t0
             if self.is_rank0:
                 removed_stale_stats, removed_stale_onnx = self._cleanup_stale_runtime_artifacts(iteration)
-            self._barrier()
 
-            self.model.train()
             epoch_times = []
-            train_start = time.perf_counter()
-            epoch_iter = range(self.args["num_epochs"])
-            if self.is_rank0:
+            if self._train_ddp_world_size() > 1:
+                tmp_model_path = f"./tmp_cpp_selfplay/ddp_model_{iteration}.pt"
+                tmp_optimizer_path = f"./tmp_cpp_selfplay/ddp_optimizer_{iteration}.pt"
+                torch.save(self.raw_model.state_dict(), tmp_model_path)
+                torch.save(self.optimizer.state_dict(), tmp_optimizer_path)
+                train_total_sec = self._run_ddp_train_subprocess(
+                    iteration, tmp_model_path, tmp_optimizer_path
+                )
+                self.raw_model.load_state_dict(torch.load(tmp_model_path, map_location=self.device))
+                self.optimizer.load_state_dict(torch.load(tmp_optimizer_path, map_location=self.device))
+                self.raw_model.to(self.device)
+                self.raw_model.device = self.device
+                os.remove(tmp_model_path)
+                os.remove(tmp_optimizer_path)
+            else:
+                self.model.train()
+                train_start = time.perf_counter()
                 epoch_iter = trange(self.args["num_epochs"], desc=f"train iter {iteration}")
-            for epoch in epoch_iter:
-                epoch_start = time.perf_counter()
-                self.train(memory, iteration, epoch)
-                epoch_times.append(time.perf_counter() - epoch_start)
-            train_total_sec = time.perf_counter() - train_start
-            self._barrier()
+                for epoch in epoch_iter:
+                    epoch_start = time.perf_counter()
+                    self.train(memory, iteration, epoch)
+                    epoch_times.append(time.perf_counter() - epoch_start)
+                train_total_sec = time.perf_counter() - train_start
 
             save_start = time.perf_counter()
             if self.is_rank0:

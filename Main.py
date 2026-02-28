@@ -16,6 +16,10 @@ from utils import load_config
 torch.manual_seed(0)
 
 
+def _is_rank0_process():
+    return int(os.environ.get("RANK", "0")) == 0
+
+
 def _infer_last_iteration_from_model_path(model_path):
     filename = os.path.basename(model_path)
     match = re.search(r"^model_(\d+)_.*\.pt$", filename)
@@ -142,7 +146,9 @@ def model_learn(config_name, resume_model=None, resume_optimizer=None, resume_it
     config_stem = os.path.splitext(os.path.basename(str(config_name)))[0]
     log_root = str(args.get("log_root", "logs"))
     args["log_dir"] = os.path.join(log_root, str(game_name), config_stem)
-    print(f"[learn] tensorboard log_dir: {args['log_dir']}")
+    args["config_name"] = config_stem
+    if _is_rank0_process():
+        print(f"[learn] tensorboard log_dir: {args['log_dir']}")
 
     model = ResNet(game, 4, 64, device, input_channels=game.input_channels)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
@@ -177,6 +183,27 @@ def model_learn(config_name, resume_model=None, resume_optimizer=None, resume_it
 
     trainer = AlphaZeroParallel(model, optimizer, game, args, monitor=True)
     trainer.learn()
+
+
+def model_train_ddp(config_name, model_path, optimizer_path, iteration):
+    args = load_config(f"./configs/learn/{config_name}.yaml")
+    game_name = args.get("game", "gomoku")
+    game = make_game(game_name)
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
+    config_stem = os.path.splitext(os.path.basename(str(config_name)))[0]
+    log_root = str(args.get("log_root", "logs"))
+    args["log_dir"] = os.path.join(log_root, str(game_name), config_stem)
+    args["config_name"] = config_stem
+    args["ddp_train_only"] = True
+
+    model = ResNet(game, 4, 64, device, input_channels=game.input_channels)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0001)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    optimizer.load_state_dict(torch.load(optimizer_path, map_location=device))
+
+    trainer = AlphaZeroParallel(model, optimizer, game, args, monitor=False)
+    trainer.train_iteration_only(int(iteration), model_path, optimizer_path)
 
 
 def _load_model_for_play(game, device, version):
@@ -270,6 +297,11 @@ if __name__ == "__main__":
         default=None,
         help="Override last completed iteration index (default: inferred from --resume-model filename)",
     )
+    train_ddp_parser = subparsers.add_parser("train-ddp", help=argparse.SUPPRESS)
+    train_ddp_parser.add_argument("--config", type=str, required=True)
+    train_ddp_parser.add_argument("--model-path", type=str, required=True)
+    train_ddp_parser.add_argument("--optimizer-path", type=str, required=True)
+    train_ddp_parser.add_argument("--iteration", type=int, required=True)
     play_parser = subparsers.add_parser("play")
     play_parser.add_argument("--version", type=str, default="0")
     play_parser.add_argument("--config", type=str, default="play0")
@@ -287,5 +319,7 @@ if __name__ == "__main__":
         model_test()
     elif args.mode == "learn":
         model_learn(args.config, args.resume_model, args.resume_optimizer, args.resume_iter)
+    elif args.mode == "train-ddp":
+        model_train_ddp(args.config, args.model_path, args.optimizer_path, args.iteration)
     elif args.mode == "play":
         model_play(args.version, args.config, args.human_player, args.versus_version)
